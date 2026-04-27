@@ -1,0 +1,51 @@
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Packaging and build output
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# ros2unbag local shell history
+.ros2unbag_history
+
+# Local ROS bags and generated export outputs.
+# Keep lab/research data out of the public repository unless intentionally curated.
+bag/
+export/
+exports/
+exported_scan/
+*_export/
+_tmp*/
+*.db3
+*.db3-shm
+*.db3-wal
+*.mcap
+*.bag
+*.bin
+*.mp4
+
+# Generated report/data files from local runs
+manifest.json
+topics.csv
+timestamps.csv

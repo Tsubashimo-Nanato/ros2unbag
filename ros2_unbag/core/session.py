@@ -1,0 +1,301 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from .bag_reader import BaseBagReader, open_bag_reader
+from .manifest import build_manifest, write_manifest, write_topics_csv
+from .models import ExportResult, Manifest, TopicDuration, TopicInfo
+from .sync import InspectResult, inspect_time as inspect_time_core
+from .topic_indexer import build_timestamp_index
+from .type_classifier import classify_topic, suggested_exports_for_category
+from ..exporters.csv_exporter import export_topic_csv
+from ..exporters.image_exporter import export_topic_images
+from ..exporters.jsonl_exporter import export_topic_jsonl
+from ..exporters.raw_exporter import export_topic_raw
+from ..exporters.video_exporter import export_topic_video
+
+
+IMPLEMENTED_EXPORTS = {"csv", "jpg", "jsonl", "mp4", "png", "raw"}
+FUTURE_EXPORTS = {
+    "parquet": "Phase 4 Parquet export is scaffolded but not implemented yet.",
+    "sqlite": "Phase 4 SQLite export is scaffolded but not implemented yet.",
+}
+ALL_EXPORTS = IMPLEMENTED_EXPORTS | set(FUTURE_EXPORTS)
+
+
+class Session:
+    def __init__(self, *, backend: str = "auto") -> None:
+        self.backend = backend
+        self.bag_path: Path | None = None
+        self.topics: list[TopicInfo] = []
+        self.manifest: Manifest | None = None
+        self.reader: BaseBagReader | None = None
+
+    def open_bag(self, path: str | Path, *, backend: str | None = None) -> list[TopicInfo]:
+        self.close()
+        self.backend = backend or self.backend
+        self.bag_path = Path(path)
+        self.reader = open_bag_reader(self.bag_path, backend=self.backend)
+        self.topics = self.reader.get_topics()
+        for topic in self.topics:
+            topic.category = classify_topic(topic, [])
+            topic.suggested_exports = suggested_exports_for_category(topic.category)
+        self.manifest = None
+        return self.topics
+
+    def close(self) -> None:
+        if self.reader is not None:
+            self.reader.close()
+        self.reader = None
+        self.bag_path = None
+        self.topics = []
+        self.manifest = None
+
+    def scan(self) -> Manifest:
+        reader = self._require_reader()
+        self.manifest = build_manifest(reader)
+        self.topics = self.manifest.topics
+        return self.manifest
+
+    def list_topics(self) -> list[TopicInfo]:
+        self._require_reader()
+        if self.manifest is not None:
+            return self.manifest.topics
+        return self.topics
+
+    def inspect_time(
+        self, seconds: float, *, absolute_ns: bool = False
+    ) -> tuple[int, list[InspectResult], list[str]]:
+        reader = self._require_reader()
+        target_ns, results = inspect_time_core(
+            reader,
+            absolute_timestamp_ns=int(seconds) if absolute_ns else None,
+            relative_time_sec=None if absolute_ns else seconds,
+        )
+        warnings = list(getattr(reader, "warnings", []))
+        return target_ns, results, warnings
+
+    def export_topic(
+        self,
+        topic: str,
+        fmt: str,
+        out_dir: str | Path,
+        *,
+        fps: float = 30.0,
+    ) -> ExportResult:
+        reader = self._require_reader()
+        fmt = validate_export_format(fmt)
+        if fmt in FUTURE_EXPORTS:
+            raise ValueError(FUTURE_EXPORTS[fmt])
+        topic_names = {item.name for item in self.list_topics()}
+        if topic not in topic_names:
+            raise ValueError(f"Topic not found: {topic}")
+        bag_start_ns, bag_end_ns = self._bag_time_bounds()
+        result = run_export(
+            reader,
+            topic=topic,
+            fmt=fmt,
+            out=Path(out_dir),
+            bag_start_timestamp_ns=bag_start_ns,
+            fps=fps,
+        )
+        result.warnings.extend(_coverage_warnings(result, bag_start_ns, bag_end_ns))
+        result.warnings = sorted(set(result.warnings))
+        return result
+
+    def export_all(self, out_dir: str | Path) -> tuple[Manifest, list[ExportResult]]:
+        reader = self._require_reader()
+        manifest = self.manifest if self.manifest is not None else self.scan()
+        results: list[ExportResult] = []
+        for topic in manifest.topics:
+            if topic.message_count == 0:
+                continue
+            for fmt in default_export_formats(topic):
+                try:
+                    result = run_export(
+                        reader,
+                        topic=topic.name,
+                        fmt=fmt,
+                        out=Path(out_dir),
+                        bag_start_timestamp_ns=manifest.bag_start_timestamp_ns,
+                    )
+                    result.warnings.extend(
+                        _coverage_warnings(
+                            result,
+                            manifest.bag_start_timestamp_ns,
+                            manifest.bag_end_timestamp_ns,
+                        )
+                    )
+                    result.warnings = sorted(set(result.warnings))
+                    results.append(result)
+                except Exception as exc:
+                    results.append(
+                        ExportResult(
+                            topic=topic.name,
+                            format=fmt,
+                            output_path="",
+                            warnings=[f"Export failed: {exc}"],
+                        )
+                    )
+        manifest.exports = results
+        write_manifest(manifest, Path(out_dir) / "manifest.json")
+        write_topics_csv(manifest.topics, Path(out_dir) / "topics.csv")
+        return manifest, results
+
+    def topic_duration(self, topic: str) -> TopicDuration:
+        resolved_topic = self._resolve_topic_name(topic)
+        topic_info = next(item for item in self.list_topics() if item.name == resolved_topic)
+        bag_start_ns, bag_end_ns = self._bag_time_bounds()
+
+        first_ns = topic_info.first_timestamp_ns
+        last_ns = topic_info.last_timestamp_ns
+        count = topic_info.message_count
+        if first_ns is None or last_ns is None or count == 0:
+            topic_index = build_timestamp_index(self._require_reader(), topics=[resolved_topic])
+            timestamps = topic_index.timestamps_by_topic.get(resolved_topic, [])
+            count = len(timestamps)
+            if timestamps:
+                first_ns = timestamps[0]
+                last_ns = timestamps[-1]
+
+        return TopicDuration(
+            topic=resolved_topic,
+            msgtype=topic_info.msgtype,
+            message_count=count,
+            first_timestamp_ns=first_ns,
+            last_timestamp_ns=last_ns,
+            topic_duration_sec=_span_sec(first_ns, last_ns),
+            bag_start_timestamp_ns=bag_start_ns,
+            bag_end_timestamp_ns=bag_end_ns,
+            bag_duration_sec=_span_sec(bag_start_ns, bag_end_ns),
+            start_offset_sec=_offset_sec(first_ns, bag_start_ns),
+            end_gap_sec=_offset_sec(bag_end_ns, last_ns),
+        )
+
+    def _resolve_topic_name(self, topic: str) -> str:
+        topic_names = [item.name for item in self.list_topics()]
+        if topic in topic_names:
+            return topic
+        leaf_matches = [name for name in topic_names if name.rsplit("/", 1)[-1] == topic]
+        if len(leaf_matches) == 1:
+            return leaf_matches[0]
+        if len(leaf_matches) > 1:
+            choices = ", ".join(leaf_matches[:8])
+            raise ValueError(f"Ambiguous topic leaf {topic!r}. Use a full topic path. Matches: {choices}")
+        raise ValueError(f"Topic not found: {topic}")
+
+    def _bag_time_bounds(self) -> tuple[int | None, int | None]:
+        if self.manifest is not None:
+            return self.manifest.bag_start_timestamp_ns, self.manifest.bag_end_timestamp_ns
+        reader = self._require_reader()
+        index = build_timestamp_index(reader)
+        return index.global_start_timestamp_ns, index.global_end_timestamp_ns
+
+    def _require_reader(self) -> BaseBagReader:
+        if self.reader is None:
+            raise RuntimeError("No bag is open. Run open BAG_PATH first.")
+        return self.reader
+
+
+def validate_export_format(fmt: str) -> str:
+    normalized = fmt.lower()
+    if normalized not in ALL_EXPORTS:
+        allowed = ", ".join(sorted(ALL_EXPORTS))
+        raise ValueError(f"Unsupported format {fmt!r}. Choose one of: {allowed}")
+    return normalized
+
+
+def run_export(
+    reader: BaseBagReader,
+    *,
+    topic: str,
+    fmt: str,
+    out: Path,
+    bag_start_timestamp_ns: int | None,
+    fps: float = 30.0,
+) -> ExportResult:
+    if fmt == "csv":
+        return export_topic_csv(
+            reader,
+            topic,
+            out,
+            bag_start_timestamp_ns=bag_start_timestamp_ns,
+        )
+    if fmt == "jsonl":
+        return export_topic_jsonl(
+            reader,
+            topic,
+            out,
+            bag_start_timestamp_ns=bag_start_timestamp_ns,
+        )
+    if fmt == "raw":
+        return export_topic_raw(
+            reader,
+            topic,
+            out,
+            bag_start_timestamp_ns=bag_start_timestamp_ns,
+        )
+    if fmt in {"png", "jpg"}:
+        return export_topic_images(
+            reader,
+            topic,
+            out,
+            image_format=fmt,
+            bag_start_timestamp_ns=bag_start_timestamp_ns,
+        )
+    if fmt == "mp4":
+        return export_topic_video(
+            reader,
+            topic,
+            out,
+            fps=fps,
+            bag_start_timestamp_ns=bag_start_timestamp_ns,
+        )
+    raise ValueError(f"Unsupported implemented export format: {fmt}")
+
+
+def default_export_formats(topic: TopicInfo) -> list[str]:
+    decoded = bool(topic.sample_summary.get("decoded_available"))
+    if topic.category in {"scalar", "text", "vector_struct", "pose", "odometry", "transform"}:
+        return ["csv", "jsonl"] if decoded else ["raw"]
+    if topic.category in {"matrix_like", "custom_struct"}:
+        return ["jsonl", "csv"] if decoded else ["raw"]
+    if topic.category in {"image", "compressed_image", "mask_candidate"}:
+        return ["png"] if decoded else ["raw"]
+    return ["raw"]
+
+
+def _span_sec(start_ns: int | None, end_ns: int | None) -> float | None:
+    if start_ns is None or end_ns is None:
+        return None
+    return (end_ns - start_ns) / 1e9
+
+
+def _offset_sec(end_ns: int | None, start_ns: int | None) -> float | None:
+    if start_ns is None or end_ns is None:
+        return None
+    return (end_ns - start_ns) / 1e9
+
+
+def _coverage_warnings(
+    result: ExportResult, bag_start_ns: int | None, bag_end_ns: int | None
+) -> list[str]:
+    if (
+        bag_start_ns is None
+        or bag_end_ns is None
+        or result.first_timestamp_ns is None
+        or result.last_timestamp_ns is None
+    ):
+        return []
+    starts_late = result.first_timestamp_ns > bag_start_ns
+    ends_early = result.last_timestamp_ns < bag_end_ns
+    if not starts_late and not ends_early:
+        return []
+    topic_span = (result.last_timestamp_ns - result.first_timestamp_ns) / 1e9
+    bag_span = (bag_end_ns - bag_start_ns) / 1e9
+    return [
+        "Topic coverage differs from bag coverage: "
+        f"topic {result.first_timestamp_ns}..{result.last_timestamp_ns} "
+        f"({topic_span:.3f}s), bag {bag_start_ns}..{bag_end_ns} ({bag_span:.3f}s). "
+        "No messages for this topic exist outside the topic timestamp range in the bag index."
+    ]
