@@ -1,28 +1,28 @@
 # ros2unbag
 
-`ros2unbag` is a Python-first command-line tool for inspecting ROS bag files offline. It reads bags without playing them, lists topics and message types, builds timestamp indexes, classifies topics into practical export categories, and exports selected data into Windows-readable formats.
+`ros2unbag` is a Windows-based Python command-line tool for inspecting ROS bag files offline. It reads bags without having to play them on Linux, lists topics and message types, builds timestamp indexes, classifies topics into practical export categories, and exports selected data into Windows-readable formats.
 
 ## Status
 
-Current release target: `v1.0.0`
+Current release: `v1.0.0`
 
 Release preparation date: 2026-04-28
 
-This project is currently in an initial public release state. The core workflow is usable, but some features are incomplete and edge cases may not yet be handled.
+This project has been publicly released and is currently maintained at version `1.0.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
-Reviewed and released by Owen ZiWen Zhou. The maintainer is an amateur developer, and issues may remain. Bug reports and suggestions are welcome.
+Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
 ## Features
 
 - Offline ROS bag inspection without `ros2 bag play`.
-- Preferred `rosbags` backend for reading rosbag1/rosbag2 data without requiring a full ROS installation.
+- Preferred `rosbags` backend for reading rosbag1 and rosbag2 data without requiring a full ROS installation.
 - SQLite fallback backend for basic ROS 2 `.db3` scans and raw exports when decoded message support is unavailable.
 - Topic table, namespace tree, and interactive topic navigation views.
 - Timestamp indexing and nearest-message inspection by bag-relative time.
-- Topic duration reporting with bag-relative start/end coverage.
+- Topic duration reporting with bag-relative start and end coverage.
 - CSV export for scalar/simple decoded messages and decoded `sensor_msgs/msg/PointCloud2` point rows.
 - JSONL export for arbitrary decoded messages.
-- PNG/JPG image sequence export for supported decoded image topics.
+- PNG and JPG image sequence export for supported decoded image topics.
 - MP4 export for decoded image topics using constant FPS.
 - Timestamp sidecar CSV files for image, video, and raw exports.
 - Raw serialized dumps for unsupported or undecoded topics.
@@ -34,18 +34,6 @@ From this repository:
 
 ```powershell
 py -m pip install -e .
-```
-
-For development:
-
-```powershell
-py -m pip install -e .[dev]
-```
-
-For future GUI experiments:
-
-```powershell
-py -m pip install -e .[gui]
 ```
 
 The distribution name is `ros2unbag`, the installed command is `ros2unbag`, and the Python import package is `ros2_unbag`.
@@ -68,7 +56,52 @@ If `ros2unbag` is not on `PATH`, use Python directly:
 py -m ros2_unbag.cli.main uninstall --yes
 ```
 
-## Usage
+## Interactive Mode
+
+Run `ros2unbag` with no command to start the interactive shell:
+
+```powershell
+ros2unbag
+```
+
+The prompt is:
+
+```text
+ros2unbag>
+```
+
+Typical session:
+
+```text
+ros2unbag> open .\my_bag
+ros2unbag> scan
+ros2unbag> topics
+ros2unbag> dur /aiformula_perception/lane_line_publisher/lane_lines/center
+ros2unbag> inspect --time 25.0
+ros2unbag> export /aiformula_control/joy --format csv --out .\export
+ros2unbag> export /camera/image_raw --format mp4 --fps 30 --out .\export
+ros2unbag> export-all --out .\export
+ros2unbag> close
+ros2unbag> exit
+```
+
+Interactive commands:
+
+- `open BAG_PATH`
+- `scan [BAG_PATH]`
+- `topics`
+- `dur TOPIC`
+- `export TOPIC --format csv|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]`
+- `export-all --out OUT_DIR`
+- `inspect --time SECONDS`
+- `close`
+- `help`
+- `clear`
+- `exit` or `quit`
+
+The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--format`, `--out`, `--time`, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
+
+## Command-Line Usage
 
 Scan a bag and print the topic table:
 
@@ -86,7 +119,7 @@ ros2unbag scan .\my_bag --view tree
 ros2unbag scan .\my_bag --view nav
 ```
 
-Use `--view tree` to see the topic namespace structure. Use `--view nav` for an interactive browser where you enter `1`, `2`, `3`, etc. to open a namespace or topic, `b` / `back` to go up, and `q` / `quit` to exit.
+Use `--view tree` to see the topic namespace structure. Use `--view nav` for an interactive browser where you enter `1`, `2`, `3`, and so on to open a namespace or topic, `b` or `back` to go up, and `q` or `quit` to exit.
 
 Scan and write `manifest.json` and `topics.csv`:
 
@@ -142,51 +175,6 @@ ros2unbag --install-completion powershell
 ros2unbag --show-completion powershell
 ```
 
-## Interactive Mode
-
-Run `ros2unbag` with no command to start the interactive shell:
-
-```powershell
-ros2unbag
-```
-
-The prompt is:
-
-```text
-ros2unbag>
-```
-
-Typical session:
-
-```text
-ros2unbag> open .\my_bag
-ros2unbag> scan
-ros2unbag> topics
-ros2unbag> dur /aiformula_perception/lane_line_publisher/lane_lines/center
-ros2unbag> inspect --time 25.0
-ros2unbag> export /aiformula_control/joy --format csv --out .\export
-ros2unbag> export /camera/image_raw --format mp4 --fps 30 --out .\export
-ros2unbag> export-all --out .\export
-ros2unbag> close
-ros2unbag> exit
-```
-
-Interactive commands:
-
-- `open BAG_PATH`
-- `scan [BAG_PATH]`
-- `topics`
-- `dur TOPIC`
-- `export TOPIC --format csv|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]`
-- `export-all --out OUT_DIR`
-- `inspect --time SECONDS`
-- `close`
-- `help`
-- `clear`
-- `exit` / `quit`
-
-The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--format`, `--out`, `--time`, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
-
 ## Example Workflow
 
 ```powershell
@@ -224,7 +212,7 @@ Implemented:
 - `csv` for scalar and simple decoded structs
 - `csv` point-row export for decoded `sensor_msgs/msg/PointCloud2`
 - `jsonl` for arbitrary decoded messages
-- `png` / `jpg` image sequences for decoded `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage`
+- `png` and `jpg` image sequences for decoded `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage`
 - `mp4` video for decoded image topics, with a timestamp sidecar CSV
 - `raw` for serialized CDR/message bytes with a timestamp sidecar CSV
 
@@ -237,16 +225,16 @@ Recognized but not implemented:
 
 ```text
 .
-├── .github/
-├── .gitignore
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── LICENSE
-├── README.md
-├── SECURITY.md
-├── pyproject.toml
-├── ros2_unbag/
-└── tests/
+|- .github/
+|- .gitignore
+|- CHANGELOG.md
+|- CONTRIBUTING.md
+|- LICENSE
+|- README.md
+|- SECURITY.md
+|- pyproject.toml
+|- ros2_unbag/
+`- tests/
 ```
 
 The source package contains `cli/`, `core/`, `exporters/`, and an intentionally reserved `gui/` package for the future PySide6 timeline viewer. `parquet_exporter.py` and `sqlite_exporter.py` are reserved for planned export formats.
@@ -266,17 +254,17 @@ The source package contains `cli/`, `core/`, `exporters/`, and an intentionally 
 
 ## Development Disclosure
 
-This project was developed with significant AI assistance, including code generation, refactoring, and documentation support. The AI coding agent used during development was Codex5.5. Final integration, testing, code review, and release approval were performed by Owen ZiWen Zhou. This review should not be interpreted as a professional security audit or production-level code audit. Issues, bug reports, and improvement suggestions are welcome.
+This project was developed with significant AI assistance, including code generation, refactoring, and documentation support. The AI coding agent used during development was Codex5.5. Final integration, testing, code review, and release approval were performed by Owen Zi-Wen ZHOU. This review should not be interpreted as a professional security audit or production-level code audit. Issues, bug reports, and improvement suggestions are welcome.
 
 ## Affiliation / Reference
 
-Maintainer: Owen ZiWen Zhou
+Maintainer: Owen Zi-Wen ZHOU
 
 Affiliation: Sophia University | Control Engineering / AI Formula
 
 Related laboratory reference: [SophiaControl/AIformula_sophia](https://github.com/SophiaControl/AIformula_sophia)
 
-This repository is personally maintained by Owen ZiWen Zhou. The SophiaControl/AIformula_sophia repository is included only as a related laboratory reference. This should not be interpreted as a dependency, endorsement, official maintenance, publication, or ownership claim by Sophia University, the Control Laboratory, Honda, or the AI Formula project.
+This repository is personally maintained by Owen Zi-Wen ZHOU. The SophiaControl/AIformula_sophia repository is included only as a related laboratory reference. This should not be interpreted as a dependency, endorsement, official maintenance, publication, or ownership claim by Sophia University, the Control Laboratory, Honda, or the AI Formula project.
 
 ## Contributing
 
