@@ -11,15 +11,14 @@ from .type_classifier import classify_topic, suggested_exports_for_category
 from ..exporters.csv_exporter import export_topic_csv
 from ..exporters.image_exporter import export_topic_images
 from ..exporters.jsonl_exporter import export_topic_jsonl
+from ..exporters.parquet_exporter import export_topic_parquet
 from ..exporters.raw_exporter import export_topic_raw
+from ..exporters.sqlite_exporter import export_topic_sqlite
 from ..exporters.video_exporter import export_topic_video
 
 
-IMPLEMENTED_EXPORTS = {"csv", "jpg", "jsonl", "mp4", "png", "raw"}
-FUTURE_EXPORTS = {
-    "parquet": "Phase 4 Parquet export is scaffolded but not implemented yet.",
-    "sqlite": "Phase 4 SQLite export is scaffolded but not implemented yet.",
-}
+IMPLEMENTED_EXPORTS = {"csv", "jpg", "jsonl", "mp4", "parquet", "png", "raw", "sqlite"}
+FUTURE_EXPORTS: dict[str, str] = {}
 ALL_EXPORTS = IMPLEMENTED_EXPORTS | set(FUTURE_EXPORTS)
 
 
@@ -235,6 +234,20 @@ def run_export(
             out,
             bag_start_timestamp_ns=bag_start_timestamp_ns,
         )
+    if fmt == "parquet":
+        return export_topic_parquet(
+            reader,
+            topic,
+            out,
+            bag_start_timestamp_ns=bag_start_timestamp_ns,
+        )
+    if fmt == "sqlite":
+        return export_topic_sqlite(
+            reader,
+            topic,
+            out,
+            bag_start_timestamp_ns=bag_start_timestamp_ns,
+        )
     if fmt in {"png", "jpg"}:
         return export_topic_images(
             reader,
@@ -257,9 +270,9 @@ def run_export(
 def default_export_formats(topic: TopicInfo) -> list[str]:
     decoded = bool(topic.sample_summary.get("decoded_available"))
     if topic.category in {"scalar", "text", "vector_struct", "pose", "odometry", "transform"}:
-        return ["csv", "jsonl"] if decoded else ["raw"]
+        return ["csv", "parquet", "jsonl", "sqlite"] if decoded else ["raw"]
     if topic.category in {"matrix_like", "custom_struct"}:
-        return ["jsonl", "csv"] if decoded else ["raw"]
+        return ["jsonl", "csv", "parquet", "sqlite"] if decoded else ["raw"]
     if topic.category in {"image", "compressed_image", "mask_candidate"}:
         return ["png"] if decoded else ["raw"]
     return ["raw"]

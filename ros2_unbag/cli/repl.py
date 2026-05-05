@@ -267,7 +267,7 @@ def render_repl_help() -> None:
     console.print("  topics [--view table|tree|nav]")
     console.print("  dur TOPIC")
     console.print("  inspect --time SECONDS")
-    console.print("  export TOPIC --format csv|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]")
+    console.print("  export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]")
     console.print("  export-all --out OUT_DIR")
     console.print("  close")
     console.print("  clear")

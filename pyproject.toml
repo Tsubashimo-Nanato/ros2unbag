@@ -4,16 +4,16 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ros2unbag"
-version = "1.0.0"
+version = "1.2.0"
 description = "Offline ROS 1/2 bag inspection and export tooling."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-  { name = "Owen ZiWen Zhou" }
+  { name = "Owen Zi-Wen ZHOU" }
 ]
 maintainers = [
-  { name = "Owen ZiWen Zhou" }
+  { name = "Owen Zi-Wen ZHOU" }
 ]
 keywords = ["ros", "ros2", "rosbag", "robotics", "export", "inspection"]
 classifiers = [

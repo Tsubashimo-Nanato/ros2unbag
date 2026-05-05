@@ -4,11 +4,11 @@
 
 ## Status
 
-Current release: `v1.0.0`
+Current release: `v1.2.0`
 
-Release preparation date: 2026-04-28
+Release preparation date: 2026-05-06
 
-This project has been publicly released and is currently maintained at version `1.0.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.2.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -24,6 +24,8 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - JSONL export for arbitrary decoded messages.
 - PNG and JPG image sequence export for supported decoded image topics.
 - MP4 export for decoded image topics using constant FPS.
+- Parquet export for flattened tabular topic data.
+- SQLite session export with topic metadata, message rows, export records, and per-topic flattened tables.
 - Timestamp sidecar CSV files for image, video, and raw exports.
 - Raw serialized dumps for unsupported or undecoded topics.
 - Interactive REPL shell with command history and tab completion.
@@ -79,6 +81,8 @@ ros2unbag> topics
 ros2unbag> dur /aiformula_perception/lane_line_publisher/lane_lines/center
 ros2unbag> inspect --time 25.0
 ros2unbag> export /aiformula_control/joy --format csv --out .\export
+ros2unbag> export /aiformula_control/joy --format parquet --out .\export
+ros2unbag> export /aiformula_control/joy --format sqlite --out .\export
 ros2unbag> export /camera/image_raw --format mp4 --fps 30 --out .\export
 ros2unbag> export-all --out .\export
 ros2unbag> close
@@ -91,7 +95,7 @@ Interactive commands:
 - `scan [BAG_PATH]`
 - `topics`
 - `dur TOPIC`
-- `export TOPIC --format csv|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]`
+- `export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]`
 - `export-all --out OUT_DIR`
 - `inspect --time SECONDS`
 - `close`
@@ -131,6 +135,8 @@ Export one topic:
 
 ```powershell
 ros2unbag export .\my_bag --topic /imu --format csv --out .\export
+ros2unbag export .\my_bag --topic /imu --format parquet --out .\export
+ros2unbag export .\my_bag --topic /imu --format sqlite --out .\export
 ros2unbag export .\my_bag --topic /diagnostics --format jsonl --out .\export
 ros2unbag export .\my_bag --topic /camera/image_raw --format png --out .\export
 ros2unbag export .\my_bag --topic /camera/image_raw --format jpg --out .\export
@@ -205,21 +211,36 @@ MP4 export currently uses `constant_fps` mode. The video plays frames sequential
 
 Timestamp CSV sidecars include the source ROS timestamp in nanoseconds and `timestamp_sec_from_start` relative to the bag start. Image and video sidecars also include frame index, dimensions, encoding, and output filename or video time.
 
+Parquet export writes one `.parquet` file per selected topic:
+
+```text
+export/parquet/<sanitized_topic_name>.parquet
+```
+
+SQLite export writes or updates one session database:
+
+```text
+export/sqlite/session.sqlite
+```
+
+The SQLite database contains `topics`, `messages`, and `exports` tables, plus one flattened per-topic table named from the sanitized topic path.
+
 ## Supported Export Formats
 
 Implemented:
 
 - `csv` for scalar and simple decoded structs
 - `csv` point-row export for decoded `sensor_msgs/msg/PointCloud2`
+- `parquet` for flattened tabular topic data
+- `sqlite` for a session database with metadata, message rows, and per-topic flattened tables
 - `jsonl` for arbitrary decoded messages
 - `png` and `jpg` image sequences for decoded `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage`
 - `mp4` video for decoded image topics, with a timestamp sidecar CSV
 - `raw` for serialized CDR/message bytes with a timestamp sidecar CSV
 
-Recognized but not implemented:
+Planned:
 
-- `parquet`
-- `sqlite`
+- GUI timeline viewer
 
 ## Project Structure
 
@@ -237,7 +258,7 @@ Recognized but not implemented:
 `- tests/
 ```
 
-The source package contains `cli/`, `core/`, `exporters/`, and an intentionally reserved `gui/` package for the future PySide6 timeline viewer. `parquet_exporter.py` and `sqlite_exporter.py` are reserved for planned export formats.
+The source package contains `cli/`, `core/`, `exporters/`, and an intentionally reserved `gui/` package for the future PySide6 timeline viewer.
 
 ## Known Limitations
 
@@ -248,7 +269,8 @@ The source package contains `cli/`, `core/`, `exporters/`, and an intentionally 
 - Compressed image decoding relies on OpenCV `cv2.imdecode`.
 - MP4 writing relies on OpenCV `cv2.VideoWriter`; codec support can vary by Python/OpenCV/platform combination.
 - MP4 export currently supports constant-FPS output only. Use the generated timestamp CSV for true ROS timing.
-- Parquet, SQLite, and GUI features are not implemented yet.
+- SQLite export stores flattened message rows. Complex nested values that do not map cleanly to scalar columns are stored as JSON strings.
+- The GUI timeline viewer is not implemented yet.
 - Custom message support depends on what `rosbags` can deserialize from bag metadata. A future CLI option may accept custom `.msg` or `.idl` definition paths.
 - ROS bags may contain camera images, sensor recordings, paths, or other private lab data. Review exported files before sharing them.
 

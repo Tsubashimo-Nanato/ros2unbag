@@ -2,6 +2,17 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.2.0] - 2026-05-06
+
+Phase 4 tabular export release.
+
+### Added
+
+- Parquet export for flattened tabular topic data.
+- SQLite session export with metadata tables, message rows, export records, and per-topic flattened tables.
+- Shared tabular export collection for CSV, Parquet, and SQLite outputs, including PointCloud2 point-row expansion and raw metadata fallback rows.
+- CLI and interactive shell support for dispatching `parquet` and `sqlite` export formats.
+
 ## [1.0.0] - 2026-04-28
 
 Initial public release preparation.
