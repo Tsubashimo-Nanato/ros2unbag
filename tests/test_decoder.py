@@ -17,6 +17,7 @@ class FakeMessage:
     nested: Nested
     small_array: list[int]
     large_array: list[int]
+    empty_array: list[int] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -37,6 +38,7 @@ class DecoderTests(unittest.TestCase):
         self.assertEqual(flattened["nested.value"], 1.5)
         self.assertEqual(flattened["small_array.0"], 1)
         self.assertIn("large_array", flattened)
+        self.assertEqual(flattened["empty_array"], "[]")
 
     def test_bytes_are_preserved_as_base64(self) -> None:
         data = message_to_plain({"payload": b"abc"})

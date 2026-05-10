@@ -91,13 +91,16 @@ def flatten_message(value: Any, *, array_expand_limit: int = 16) -> dict[str, An
     def visit(prefix: str, item: Any) -> None:
         if isinstance(item, Mapping):
             if not item:
-                flattened[prefix] = "{}"
+                flattened[prefix or "value"] = "{}"
                 return
             for key in sorted(item):
                 child = f"{prefix}.{key}" if prefix else str(key)
                 visit(child, item[key])
             return
         if isinstance(item, list):
+            if not item:
+                flattened[prefix or "value"] = "[]"
+                return
             if len(item) <= array_expand_limit and all(is_scalar(entry) for entry in item):
                 for index, entry in enumerate(item):
                     flattened[f"{prefix}.{index}"] = entry

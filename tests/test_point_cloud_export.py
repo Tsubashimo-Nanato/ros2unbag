@@ -54,6 +54,46 @@ class PointCloudExportTests(unittest.TestCase):
         self.assertEqual(rows[0]["y"], 2.0)
         self.assertEqual(rows[1]["z"], 6.0)
 
+    def test_point_cloud_rows_respect_row_step_padding(self) -> None:
+        fields = [FakePointField("x", 0, 7)]
+        data = (
+            struct.pack("<f", 1.0)
+            + b"PAD!"
+            + struct.pack("<f", 2.0)
+            + b"PAD!"
+        )
+        cloud = FakePointCloud2(
+            width=1,
+            height=2,
+            fields=fields,
+            is_bigendian=False,
+            point_step=4,
+            row_step=8,
+            data=data,
+        )
+
+        rows = point_cloud_rows(cloud)
+
+        self.assertEqual([row["x"] for row in rows], [1.0, 2.0])
+        self.assertEqual([row["cloud_row"] for row in rows], [0, 1])
+
+    def test_point_cloud_field_does_not_read_across_point_boundary(self) -> None:
+        fields = [FakePointField("bad", 10, 7)]
+        data = struct.pack("<ffffff", 1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
+        cloud = FakePointCloud2(
+            width=2,
+            height=1,
+            fields=fields,
+            is_bigendian=False,
+            point_step=12,
+            row_step=24,
+            data=data,
+        )
+
+        rows = point_cloud_rows(cloud)
+
+        self.assertNotIn("bad", rows[0])
+
     def test_csv_export_expands_pointcloud_messages_to_point_rows(self) -> None:
         topic = "/points"
         record = MessageRecord(

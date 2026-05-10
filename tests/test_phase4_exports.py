@@ -91,8 +91,31 @@ class Phase4ExportTests(unittest.TestCase):
         self.assertEqual(topic_count, 1)
         self.assertEqual(message_count, 2)
         self.assertEqual(export_count, 1)
-        self.assertEqual(rows, [(100, "one", "1.5"), (200, "two", "1.5")])
+        self.assertEqual(rows, [(100, "one", 1.5), (200, "two", 1.5)])
         self.assertIn(("idx_topic__numbers_timestamp_ns",), indexes)
+
+    def test_sqlite_topic_table_names_do_not_collapse_punctuation(self) -> None:
+        reader = FakeReader([
+            _record("/foo/a.b", 100, "dot"),
+            _record("/foo/a-b", 200, "dash"),
+        ])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first = export_topic_sqlite(reader, "/foo/a.b", Path(temp_dir))
+            export_topic_sqlite(reader, "/foo/a-b", Path(temp_dir))
+            connection = sqlite3.connect(first.output_path)
+            try:
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "select name from sqlite_master where type = 'table'"
+                    )
+                }
+            finally:
+                connection.close()
+
+        self.assertIn("topic__foo__a.b", tables)
+        self.assertIn("topic__foo__a-b", tables)
 
     def test_phase4_formats_are_implemented_and_dispatchable(self) -> None:
         topic = "/numbers"

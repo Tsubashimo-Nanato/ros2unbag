@@ -79,7 +79,7 @@ def export_topic_raw(
         message_count=count,
         first_timestamp_ns=first_timestamp,
         last_timestamp_ns=last_timestamp,
-        warnings=warnings,
+        warnings=sorted(set(warnings)),
     )
 
 

@@ -30,25 +30,39 @@ def point_cloud_rows(message: object) -> list[dict[str, object]]:
     fields = [field for field in fields if field.datatype in POINT_FIELD_FORMATS]
     data = _data_bytes(getattr(message, "data", b""))
     point_step = int(getattr(message, "point_step", 0) or 0)
+    row_step = int(getattr(message, "row_step", 0) or 0)
     width = int(getattr(message, "width", 0) or 0)
     height = int(getattr(message, "height", 0) or 0)
     is_bigendian = bool(getattr(message, "is_bigendian", False))
     if point_step <= 0 or not data:
         return []
-    declared_points = width * height
-    available_points = len(data) // point_step
-    point_count = min(declared_points, available_points) if declared_points else available_points
     endian = ">" if is_bigendian else "<"
 
     rows: list[dict[str, object]] = []
+    if width > 0 and height > 0:
+        row_stride = row_step if row_step >= width * point_step else width * point_step
+        for cloud_row in range(height):
+            for cloud_col in range(width):
+                point_index = (cloud_row * width) + cloud_col
+                base_offset = (cloud_row * row_stride) + (cloud_col * point_step)
+                if base_offset + point_step > len(data):
+                    continue
+                row: dict[str, object] = {
+                    "point_index": point_index,
+                    "cloud_row": cloud_row,
+                    "cloud_col": cloud_col,
+                }
+                for field in fields:
+                    row.update(_read_field(data, base_offset, point_step, field, endian))
+                rows.append(row)
+        return rows
+
+    point_count = len(data) // point_step
     for point_index in range(point_count):
         base_offset = point_index * point_step
-        row: dict[str, object] = {"point_index": point_index}
-        if width > 0:
-            row["cloud_row"] = point_index // width
-            row["cloud_col"] = point_index % width
+        row = {"point_index": point_index}
         for field in fields:
-            row.update(_read_field(data, base_offset, field, endian))
+            row.update(_read_field(data, base_offset, point_step, field, endian))
         rows.append(row)
     return rows
 
@@ -76,13 +90,13 @@ def _field_spec(field: object) -> PointCloudFieldSpec:
 
 
 def _read_field(
-    data: bytes, base_offset: int, field: PointCloudFieldSpec, endian: str
+    data: bytes, base_offset: int, point_step: int, field: PointCloudFieldSpec, endian: str
 ) -> dict[str, object]:
     fmt, size = POINT_FIELD_FORMATS[field.datatype]
     values: dict[str, object] = {}
     for index in range(field.count):
         offset = base_offset + field.offset + (index * size)
-        if offset + size > len(data):
+        if offset + size > len(data) or offset + size > base_offset + point_step:
             continue
         value = struct.unpack_from(endian + fmt, data, offset)[0]
         key = field.name if field.count == 1 else f"{field.name}.{index}"

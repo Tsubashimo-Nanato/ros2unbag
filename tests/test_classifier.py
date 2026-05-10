@@ -4,7 +4,7 @@ import dataclasses
 import unittest
 
 from ros2_unbag.core.models import MessageRecord, TopicInfo
-from ros2_unbag.core.type_classifier import classify_topic
+from ros2_unbag.core.type_classifier import classify_topic, suggested_exports_for_category
 
 
 @dataclasses.dataclass
@@ -56,6 +56,12 @@ class ClassifierTests(unittest.TestCase):
     def test_unknown_raw_when_no_decoded_samples(self) -> None:
         topic = TopicInfo(name="/custom/raw", msgtype="custom/msg/Raw")
         self.assertEqual(classify_topic(topic, []), "unknown_raw")
+
+    def test_point_cloud_suggests_tabular_exports(self) -> None:
+        self.assertEqual(
+            suggested_exports_for_category("point_cloud"),
+            ["csv", "parquet", "sqlite", "raw"],
+        )
 
 
 if __name__ == "__main__":

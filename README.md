@@ -4,11 +4,11 @@
 
 ## Status
 
-Current release: `v1.2.0`
+Current release: `v1.2.2`
 
-Release preparation date: 2026-05-06
+Release preparation date: 2026-05-11
 
-This project has been publicly released and is currently maintained at version `1.2.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.2.2`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 

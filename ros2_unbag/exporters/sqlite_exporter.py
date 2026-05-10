@@ -153,7 +153,10 @@ def _replace_topic_table(
     quoted = _quote_identifier(table_name)
     connection.execute(f"drop table if exists {quoted}")
     columns = [_quote_identifier(field) for field in fieldnames]
-    column_sql = ", ".join(f"{column} {_sqlite_type(column)}" for column in columns)
+    column_sql = ", ".join(
+        f"{_quote_identifier(field)} {_sqlite_type(field, rows)}"
+        for field in fieldnames
+    )
     connection.execute(f"create table {quoted} ({column_sql})")
     if rows:
         placeholders = ", ".join("?" for _ in fieldnames)
@@ -231,18 +234,24 @@ def _first_msgtype(reader: object, topic: str) -> str | None:
 
 
 def _topic_table_name(topic: str) -> str:
-    return "topic__" + sanitize_topic_name(topic).replace("-", "_").replace(".", "_")
+    return "topic__" + sanitize_topic_name(topic)
 
 
 def _quote_identifier(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
 
-def _sqlite_type(quoted_column: str) -> str:
-    column = quoted_column.strip('"')
-    if column in {"timestamp_ns", "point_index", "row", "col", "raw_byte_length"}:
+def _sqlite_type(fieldname: str, rows: list[dict[str, Any]]) -> str:
+    if fieldname in {"timestamp_ns", "point_index", "row", "col", "raw_byte_length"}:
         return "integer"
-    if column == "timestamp_sec_from_start":
+    if fieldname == "timestamp_sec_from_start":
+        return "real"
+    values = [row.get(fieldname) for row in rows if row.get(fieldname) is not None]
+    if values and all(isinstance(value, bool) for value in values):
+        return "integer"
+    if values and all(isinstance(value, int) and not isinstance(value, bool) for value in values):
+        return "integer"
+    if values and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
         return "real"
     return "text"
 

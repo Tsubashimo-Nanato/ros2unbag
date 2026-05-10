@@ -32,9 +32,12 @@ class Session:
 
     def open_bag(self, path: str | Path, *, backend: str | None = None) -> list[TopicInfo]:
         self.close()
-        self.backend = backend or self.backend
-        self.bag_path = Path(path)
-        self.reader = open_bag_reader(self.bag_path, backend=self.backend)
+        selected_backend = backend or self.backend
+        bag_path = Path(path)
+        reader = open_bag_reader(bag_path, backend=selected_backend)
+        self.backend = selected_backend
+        self.bag_path = bag_path
+        self.reader = reader
         self.topics = self.reader.get_topics()
         for topic in self.topics:
             topic.category = classify_topic(topic, [])

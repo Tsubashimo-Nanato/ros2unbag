@@ -2,6 +2,20 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.2.2] - 2026-05-11
+
+Bugfix and export robustness release.
+
+### Fixed
+
+- Rejected unknown bag reader backends before opening a session and preserved the previous session state when open failed.
+- Preserved empty arrays and dictionaries when flattening decoded messages.
+- Respected `PointCloud2` row padding and avoided reading fields across point boundaries.
+- Suggested tabular export formats for point cloud topics.
+- Preserved distinct SQLite topic table names for topic paths that differ only by punctuation.
+- Inferred numeric SQLite column types from exported row values.
+- Deduplicated raw export warnings.
+
 ## [1.2.0] - 2026-05-06
 
 Phase 4 tabular export release.
@@ -31,7 +45,7 @@ Initial public release preparation.
 
 ### Known Incomplete Areas
 
-- Parquet and SQLite exports are recognized as planned formats but are not implemented yet.
+- At the time of the 1.0.0 release, Parquet and SQLite exports were recognized as planned formats but were not implemented yet.
 - The PySide6 GUI timeline viewer is reserved for future work and is not implemented.
 - Image decoding is limited to common 8-bit encodings and OpenCV-decodable compressed images.
 - Custom message support depends on what `rosbags` can deserialize from bag metadata unless future custom definition loading is added.

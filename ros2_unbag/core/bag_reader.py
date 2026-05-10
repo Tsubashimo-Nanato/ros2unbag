@@ -294,6 +294,8 @@ class SqliteRosbag2Reader(BaseBagReader):
 
 def open_bag_reader(path: str | Path, backend: str = "auto") -> BaseBagReader:
     path = Path(path)
+    if backend not in {"auto", "rosbags", "sqlite"}:
+        raise ValueError("backend must be one of: auto, rosbags, sqlite")
     errors: list[str] = []
     if backend in {"auto", "rosbags"}:
         reader = RosbagsReader()
