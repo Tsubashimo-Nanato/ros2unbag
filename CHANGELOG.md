@@ -2,6 +2,15 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.3.1] - 2026-05-12
+
+Performance release.
+
+### Changed
+
+- Single-topic exports now use backend metadata for bag start/end timestamps when available instead of building a full-bag timestamp index before export.
+- Bag time bounds are cached per session after they are discovered.
+
 ## [1.3.0] - 2026-05-12
 
 Progress and package naming release.

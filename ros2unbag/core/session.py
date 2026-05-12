@@ -4,7 +4,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from pathlib import Path
 
-from .bag_reader import BaseBagReader, open_bag_reader
+from .bag_reader import BaseBagReader, open_bag_reader, time_bounds_from_topics
 from .manifest import build_manifest, write_manifest, write_topics_csv
 from .models import ExportResult, Manifest, TopicDuration, TopicInfo
 from .progress import ProgressCallback
@@ -33,6 +33,7 @@ class Session:
         self.topics: list[TopicInfo] = []
         self.manifest: Manifest | None = None
         self.reader: BaseBagReader | None = None
+        self._bag_time_bounds_cache: tuple[int | None, int | None] | None = None
 
     def open_bag(self, path: str | Path, *, backend: str | None = None) -> list[TopicInfo]:
         self.close()
@@ -56,6 +57,7 @@ class Session:
         self.bag_path = None
         self.topics = []
         self.manifest = None
+        self._bag_time_bounds_cache = None
 
     def scan(self, *, progress_factory: ProgressFactory | None = None) -> Manifest:
         reader = self._require_reader()
@@ -65,6 +67,10 @@ class Session:
             with progress_factory("Scanning bag messages", _total_message_count(self.topics)) as advance:
                 self.manifest = build_manifest(reader, progress_callback=advance)
         self.topics = self.manifest.topics
+        self._bag_time_bounds_cache = (
+            self.manifest.bag_start_timestamp_ns,
+            self.manifest.bag_end_timestamp_ns,
+        )
         return self.manifest
 
     def list_topics(self) -> list[TopicInfo]:
@@ -240,13 +246,23 @@ class Session:
     ) -> tuple[int | None, int | None]:
         if self.manifest is not None:
             return self.manifest.bag_start_timestamp_ns, self.manifest.bag_end_timestamp_ns
+        if self._bag_time_bounds_cache is not None:
+            return self._bag_time_bounds_cache
         reader = self._require_reader()
+        metadata_bounds = _reader_time_bounds(reader, self.topics)
+        if metadata_bounds[0] is not None and metadata_bounds[1] is not None:
+            self._bag_time_bounds_cache = metadata_bounds
+            return metadata_bounds
         if progress_factory is None:
             index = build_timestamp_index(reader)
         else:
             with progress_factory("Indexing bag time bounds", _total_message_count(self.topics)) as advance:
                 index = build_timestamp_index(reader, progress_callback=advance)
-        return index.global_start_timestamp_ns, index.global_end_timestamp_ns
+        self._bag_time_bounds_cache = (
+            index.global_start_timestamp_ns,
+            index.global_end_timestamp_ns,
+        )
+        return self._bag_time_bounds_cache
 
     def _run_export_with_progress(
         self,
@@ -400,6 +416,21 @@ def _offset_sec(end_ns: int | None, start_ns: int | None) -> float | None:
 def _total_message_count(topics: list[TopicInfo]) -> int | None:
     total = sum(topic.message_count for topic in topics if topic.message_count > 0)
     return total if total > 0 else None
+
+
+def _reader_time_bounds(
+    reader: object,
+    topics: list[TopicInfo],
+) -> tuple[int | None, int | None]:
+    get_time_bounds = getattr(reader, "get_time_bounds", None)
+    if callable(get_time_bounds):
+        try:
+            start, end = get_time_bounds()
+        except Exception:
+            start, end = None, None
+        if start is not None and end is not None:
+            return int(start), int(end)
+    return time_bounds_from_topics(topics)
 
 
 def _coverage_warnings(

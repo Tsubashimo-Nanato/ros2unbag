@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v1.3.0`
+Current release: `v1.3.1`
 
 Release preparation date: 2026-05-12
 
-This project has been publicly released and is currently maintained at version `1.3.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.3.1`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -34,6 +34,7 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - Raw serialized dumps for unsupported or undecoded topics.
 - Interactive REPL shell with command history and tab completion.
 - Non-flooding Rich progress display for bag opening and progress bars for scan/indexing, exports, image sequence output, and MP4 video output.
+- Metadata-based bag time bounds when available, avoiding a full-bag pre-index scan for single-topic exports.
 
 ## Installation
 

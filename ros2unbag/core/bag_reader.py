@@ -31,6 +31,10 @@ class BaseBagReader(ABC):
     def get_message_count(self, topic: str) -> int:
         raise NotImplementedError
 
+    def get_time_bounds(self) -> tuple[int | None, int | None]:
+        """Return bag start/end timestamps from metadata when available."""
+        return time_bounds_from_topics(self.get_topics())
+
     @abstractmethod
     def close(self) -> None:
         raise NotImplementedError
@@ -136,6 +140,15 @@ class RosbagsReader(BaseBagReader):
 
     def get_message_count(self, topic: str) -> int:
         return self._topics.get(topic, TopicInfo(topic, "")).message_count
+
+    def get_time_bounds(self) -> tuple[int | None, int | None]:
+        if self._reader is None:
+            raise RuntimeError("Reader is not open")
+        start = _optional_int(getattr(self._reader, "start_time", None))
+        end = _optional_int(getattr(self._reader, "end_time", None))
+        if start is not None and end is not None:
+            return start, end
+        return super().get_time_bounds()
 
     def close(self) -> None:
         if self._reader is not None:
@@ -340,6 +353,36 @@ def _connection_serialization_format(connection: object) -> str | None:
         if value:
             return str(value)
     return None
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def time_bounds_from_topics(topics: list[TopicInfo]) -> tuple[int | None, int | None]:
+    for topic in topics:
+        if topic.message_count > 0 and (
+            topic.first_timestamp_ns is None or topic.last_timestamp_ns is None
+        ):
+            return None, None
+    starts = [
+        topic.first_timestamp_ns
+        for topic in topics
+        if topic.first_timestamp_ns is not None
+    ]
+    ends = [
+        topic.last_timestamp_ns
+        for topic in topics
+        if topic.last_timestamp_ns is not None
+    ]
+    if not starts or not ends:
+        return None, None
+    return min(starts), max(ends)
 
 
 def _typestore_candidates() -> Sequence[tuple[str | None, object | None]]:
