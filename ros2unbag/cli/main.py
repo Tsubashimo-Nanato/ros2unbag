@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -7,7 +7,7 @@ from typing import Annotated
 
 import typer
 
-from ros2_unbag.cli.render import (
+from ros2unbag.cli.render import (
     console,
     render_export_result,
     render_export_results,
@@ -16,8 +16,9 @@ from ros2_unbag.cli.render import (
     render_topic_duration,
     render_warnings,
 )
-from ros2_unbag.core.manifest import write_manifest, write_topics_csv
-from ros2_unbag.core.session import (
+from ros2unbag.cli.progress import progress_task
+from ros2unbag.core.manifest import write_manifest, write_topics_csv
+from ros2unbag.core.session import (
     ALL_EXPORTS,
     FUTURE_EXPORTS,
     Session,
@@ -33,6 +34,7 @@ UNINSTALL_PACKAGES = (
     "pyarrow",
     "opencv-python",
     "pillow",
+    # Historical runtime dependency removed in 1.3.0; kept for clean uninstall.
     "tqdm",
     "typer",
     "rich",
@@ -67,10 +69,16 @@ app = typer.Typer(
 def main(ctx: typer.Context) -> None:
     """Start the interactive shell when no command is provided."""
     if ctx.invoked_subcommand is None:
-        from ros2_unbag.cli.repl import run_repl
+        from ros2unbag.cli.repl import run_repl
 
         run_repl()
         raise typer.Exit()
+
+
+def _open_session_with_progress(session: Session, bag_path: Path) -> None:
+    with progress_task("Opening bag", None) as advance:
+        session.open_bag(bag_path)
+        advance()
 
 
 @app.command()
@@ -88,8 +96,8 @@ def scan(
     """Scan a bag and list topics, timestamps, categories, and export hints."""
     session = Session(backend=backend)
     try:
-        session.open_bag(bag_path)
-        manifest = session.scan()
+        _open_session_with_progress(session, bag_path)
+        manifest = session.scan(progress_factory=progress_task)
         render_scan_view(manifest.topics, view=view)
         render_warnings(manifest.warnings)
         if out is not None:
@@ -129,8 +137,8 @@ def export(
 
     session = Session(backend=backend)
     try:
-        session.open_bag(bag_path)
-        result = session.export_topic(topic, fmt, out, fps=fps)
+        _open_session_with_progress(session, bag_path)
+        result = session.export_topic(topic, fmt, out, fps=fps, progress_factory=progress_task)
         render_export_result(result)
     finally:
         session.close()
@@ -147,8 +155,8 @@ def export_all(
     """Export every topic using the best implemented default for its category."""
     session = Session(backend=backend)
     try:
-        session.open_bag(bag_path)
-        manifest, results = session.export_all(out)
+        _open_session_with_progress(session, bag_path)
+        manifest, results = session.export_all(out, progress_factory=progress_task)
         render_export_results(results)
         render_warnings(manifest.warnings)
         console.print(f"Wrote [bold]{Path(out) / 'manifest.json'}[/bold]")
@@ -174,8 +182,12 @@ def inspect_command(
     """Show nearest message from every topic at a requested timestamp."""
     session = Session(backend=backend)
     try:
-        session.open_bag(bag_path)
-        target_ns, results, warnings = session.inspect_time(time, absolute_ns=absolute_ns)
+        _open_session_with_progress(session, bag_path)
+        target_ns, results, warnings = session.inspect_time(
+            time,
+            absolute_ns=absolute_ns,
+            progress_factory=progress_task,
+        )
         render_inspect_results(target_ns, results, warnings)
     finally:
         session.close()
@@ -192,8 +204,8 @@ def duration_command(
     """Show duration and bag-relative coverage for one topic."""
     session = Session(backend=backend)
     try:
-        session.open_bag(bag_path)
-        render_topic_duration(session.topic_duration(topic))
+        _open_session_with_progress(session, bag_path)
+        render_topic_duration(session.topic_duration(topic, progress_factory=progress_task))
     finally:
         session.close()
 
@@ -209,8 +221,8 @@ def manifest_command(
     """Write a manifest JSON file."""
     session = Session(backend=backend)
     try:
-        session.open_bag(bag_path)
-        manifest = session.scan()
+        _open_session_with_progress(session, bag_path)
+        manifest = session.scan(progress_factory=progress_task)
         output_path = write_manifest(manifest, out)
         console.print(f"Wrote [bold]{output_path}[/bold]")
         render_warnings(manifest.warnings)
@@ -251,3 +263,4 @@ def uninstall_command(
 
 if __name__ == "__main__":
     app()
+

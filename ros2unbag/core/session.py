@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 from .bag_reader import BaseBagReader, open_bag_reader
 from .manifest import build_manifest, write_manifest, write_topics_csv
 from .models import ExportResult, Manifest, TopicDuration, TopicInfo
+from .progress import ProgressCallback
 from .sync import InspectResult, inspect_time as inspect_time_core
 from .topic_indexer import build_timestamp_index
 from .type_classifier import classify_topic, suggested_exports_for_category
@@ -20,6 +23,7 @@ from ..exporters.video_exporter import export_topic_video
 IMPLEMENTED_EXPORTS = {"csv", "jpg", "jsonl", "mp4", "parquet", "png", "raw", "sqlite"}
 FUTURE_EXPORTS: dict[str, str] = {}
 ALL_EXPORTS = IMPLEMENTED_EXPORTS | set(FUTURE_EXPORTS)
+ProgressFactory = Callable[[str, int | None], AbstractContextManager[ProgressCallback]]
 
 
 class Session:
@@ -53,9 +57,13 @@ class Session:
         self.topics = []
         self.manifest = None
 
-    def scan(self) -> Manifest:
+    def scan(self, *, progress_factory: ProgressFactory | None = None) -> Manifest:
         reader = self._require_reader()
-        self.manifest = build_manifest(reader)
+        if progress_factory is None:
+            self.manifest = build_manifest(reader)
+        else:
+            with progress_factory("Scanning bag messages", _total_message_count(self.topics)) as advance:
+                self.manifest = build_manifest(reader, progress_callback=advance)
         self.topics = self.manifest.topics
         return self.manifest
 
@@ -66,14 +74,27 @@ class Session:
         return self.topics
 
     def inspect_time(
-        self, seconds: float, *, absolute_ns: bool = False
+        self,
+        seconds: float,
+        *,
+        absolute_ns: bool = False,
+        progress_factory: ProgressFactory | None = None,
     ) -> tuple[int, list[InspectResult], list[str]]:
         reader = self._require_reader()
-        target_ns, results = inspect_time_core(
-            reader,
-            absolute_timestamp_ns=int(seconds) if absolute_ns else None,
-            relative_time_sec=None if absolute_ns else seconds,
-        )
+        if progress_factory is None:
+            target_ns, results = inspect_time_core(
+                reader,
+                absolute_timestamp_ns=int(seconds) if absolute_ns else None,
+                relative_time_sec=None if absolute_ns else seconds,
+            )
+        else:
+            with progress_factory("Indexing timestamps", _total_message_count(self.topics)) as advance:
+                target_ns, results = inspect_time_core(
+                    reader,
+                    absolute_timestamp_ns=int(seconds) if absolute_ns else None,
+                    relative_time_sec=None if absolute_ns else seconds,
+                    progress_callback=advance,
+                )
         warnings = list(getattr(reader, "warnings", []))
         return target_ns, results, warnings
 
@@ -84,6 +105,7 @@ class Session:
         out_dir: str | Path,
         *,
         fps: float = 30.0,
+        progress_factory: ProgressFactory | None = None,
     ) -> ExportResult:
         reader = self._require_reader()
         fmt = validate_export_format(fmt)
@@ -92,34 +114,43 @@ class Session:
         topic_names = {item.name for item in self.list_topics()}
         if topic not in topic_names:
             raise ValueError(f"Topic not found: {topic}")
-        bag_start_ns, bag_end_ns = self._bag_time_bounds()
-        result = run_export(
+        bag_start_ns, bag_end_ns = self._bag_time_bounds(progress_factory=progress_factory)
+        result = self._run_export_with_progress(
             reader,
             topic=topic,
             fmt=fmt,
             out=Path(out_dir),
             bag_start_timestamp_ns=bag_start_ns,
             fps=fps,
+            progress_factory=progress_factory,
         )
         result.warnings.extend(_coverage_warnings(result, bag_start_ns, bag_end_ns))
         result.warnings = sorted(set(result.warnings))
         return result
 
-    def export_all(self, out_dir: str | Path) -> tuple[Manifest, list[ExportResult]]:
+    def export_all(
+        self,
+        out_dir: str | Path,
+        *,
+        progress_factory: ProgressFactory | None = None,
+    ) -> tuple[Manifest, list[ExportResult]]:
         reader = self._require_reader()
-        manifest = self.manifest if self.manifest is not None else self.scan()
+        manifest = self.manifest if self.manifest is not None else self.scan(
+            progress_factory=progress_factory
+        )
         results: list[ExportResult] = []
         for topic in manifest.topics:
             if topic.message_count == 0:
                 continue
             for fmt in default_export_formats(topic):
                 try:
-                    result = run_export(
+                    result = self._run_export_with_progress(
                         reader,
                         topic=topic.name,
                         fmt=fmt,
                         out=Path(out_dir),
                         bag_start_timestamp_ns=manifest.bag_start_timestamp_ns,
+                        progress_factory=progress_factory,
                     )
                     result.warnings.extend(
                         _coverage_warnings(
@@ -144,16 +175,32 @@ class Session:
         write_topics_csv(manifest.topics, Path(out_dir) / "topics.csv")
         return manifest, results
 
-    def topic_duration(self, topic: str) -> TopicDuration:
+    def topic_duration(
+        self,
+        topic: str,
+        *,
+        progress_factory: ProgressFactory | None = None,
+    ) -> TopicDuration:
         resolved_topic = self._resolve_topic_name(topic)
         topic_info = next(item for item in self.list_topics() if item.name == resolved_topic)
-        bag_start_ns, bag_end_ns = self._bag_time_bounds()
+        bag_start_ns, bag_end_ns = self._bag_time_bounds(progress_factory=progress_factory)
 
         first_ns = topic_info.first_timestamp_ns
         last_ns = topic_info.last_timestamp_ns
         count = topic_info.message_count
         if first_ns is None or last_ns is None or count == 0:
-            topic_index = build_timestamp_index(self._require_reader(), topics=[resolved_topic])
+            if progress_factory is None:
+                topic_index = build_timestamp_index(self._require_reader(), topics=[resolved_topic])
+            else:
+                with progress_factory(
+                    f"Indexing {resolved_topic}",
+                    self._message_count(resolved_topic),
+                ) as advance:
+                    topic_index = build_timestamp_index(
+                        self._require_reader(),
+                        topics=[resolved_topic],
+                        progress_callback=advance,
+                    )
             timestamps = topic_index.timestamps_by_topic.get(resolved_topic, [])
             count = len(timestamps)
             if timestamps:
@@ -186,12 +233,61 @@ class Session:
             raise ValueError(f"Ambiguous topic leaf {topic!r}. Use a full topic path. Matches: {choices}")
         raise ValueError(f"Topic not found: {topic}")
 
-    def _bag_time_bounds(self) -> tuple[int | None, int | None]:
+    def _bag_time_bounds(
+        self,
+        *,
+        progress_factory: ProgressFactory | None = None,
+    ) -> tuple[int | None, int | None]:
         if self.manifest is not None:
             return self.manifest.bag_start_timestamp_ns, self.manifest.bag_end_timestamp_ns
         reader = self._require_reader()
-        index = build_timestamp_index(reader)
+        if progress_factory is None:
+            index = build_timestamp_index(reader)
+        else:
+            with progress_factory("Indexing bag time bounds", _total_message_count(self.topics)) as advance:
+                index = build_timestamp_index(reader, progress_callback=advance)
         return index.global_start_timestamp_ns, index.global_end_timestamp_ns
+
+    def _run_export_with_progress(
+        self,
+        reader: BaseBagReader,
+        *,
+        topic: str,
+        fmt: str,
+        out: Path,
+        bag_start_timestamp_ns: int | None,
+        fps: float = 30.0,
+        progress_factory: ProgressFactory | None = None,
+    ) -> ExportResult:
+        if progress_factory is None:
+            return run_export(
+                reader,
+                topic=topic,
+                fmt=fmt,
+                out=out,
+                bag_start_timestamp_ns=bag_start_timestamp_ns,
+                fps=fps,
+            )
+        with progress_factory(
+            f"Exporting {topic} as {fmt}",
+            self._message_count(topic),
+        ) as advance:
+            return run_export(
+                reader,
+                topic=topic,
+                fmt=fmt,
+                out=out,
+                bag_start_timestamp_ns=bag_start_timestamp_ns,
+                fps=fps,
+                progress_callback=advance,
+            )
+
+    def _message_count(self, topic: str) -> int | None:
+        try:
+            count = self._require_reader().get_message_count(topic)
+        except Exception:
+            return None
+        return count if count > 0 else None
 
     def _require_reader(self) -> BaseBagReader:
         if self.reader is None:
@@ -215,6 +311,7 @@ def run_export(
     out: Path,
     bag_start_timestamp_ns: int | None,
     fps: float = 30.0,
+    progress_callback: ProgressCallback | None = None,
 ) -> ExportResult:
     if fmt == "csv":
         return export_topic_csv(
@@ -222,6 +319,7 @@ def run_export(
             topic,
             out,
             bag_start_timestamp_ns=bag_start_timestamp_ns,
+            progress_callback=progress_callback,
         )
     if fmt == "jsonl":
         return export_topic_jsonl(
@@ -229,6 +327,7 @@ def run_export(
             topic,
             out,
             bag_start_timestamp_ns=bag_start_timestamp_ns,
+            progress_callback=progress_callback,
         )
     if fmt == "raw":
         return export_topic_raw(
@@ -236,6 +335,7 @@ def run_export(
             topic,
             out,
             bag_start_timestamp_ns=bag_start_timestamp_ns,
+            progress_callback=progress_callback,
         )
     if fmt == "parquet":
         return export_topic_parquet(
@@ -243,6 +343,7 @@ def run_export(
             topic,
             out,
             bag_start_timestamp_ns=bag_start_timestamp_ns,
+            progress_callback=progress_callback,
         )
     if fmt == "sqlite":
         return export_topic_sqlite(
@@ -250,6 +351,7 @@ def run_export(
             topic,
             out,
             bag_start_timestamp_ns=bag_start_timestamp_ns,
+            progress_callback=progress_callback,
         )
     if fmt in {"png", "jpg"}:
         return export_topic_images(
@@ -258,6 +360,7 @@ def run_export(
             out,
             image_format=fmt,
             bag_start_timestamp_ns=bag_start_timestamp_ns,
+            progress_callback=progress_callback,
         )
     if fmt == "mp4":
         return export_topic_video(
@@ -266,6 +369,7 @@ def run_export(
             out,
             fps=fps,
             bag_start_timestamp_ns=bag_start_timestamp_ns,
+            progress_callback=progress_callback,
         )
     raise ValueError(f"Unsupported implemented export format: {fmt}")
 
@@ -291,6 +395,11 @@ def _offset_sec(end_ns: int | None, start_ns: int | None) -> float | None:
     if start_ns is None or end_ns is None:
         return None
     return (end_ns - start_ns) / 1e9
+
+
+def _total_message_count(topics: list[TopicInfo]) -> int | None:
+    total = sum(topic.message_count for topic in topics if topic.message_count > 0)
+    return total if total > 0 else None
 
 
 def _coverage_warnings(

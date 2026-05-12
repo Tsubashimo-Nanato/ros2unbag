@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Callable
 
@@ -6,9 +6,9 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
-from ros2_unbag.core.models import ExportResult, TopicDuration, TopicInfo
-from ros2_unbag.core.sync import InspectResult
-from ros2_unbag.core.topic_tree import (
+from ros2unbag.core.models import ExportResult, TopicDuration, TopicInfo
+from ros2unbag.core.sync import InspectResult
+from ros2unbag.core.topic_tree import (
     TopicTreeNode,
     build_topic_tree,
     format_topic_compact,
@@ -256,3 +256,4 @@ def render_inspect_results(
 def render_warnings(warnings: list[str]) -> None:
     for warning in warnings:
         console.print(f"[yellow]Warning:[/yellow] {warning}")
+

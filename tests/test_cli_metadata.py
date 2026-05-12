@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ros2_unbag.cli.main import UNINSTALL_PACKAGES
+from ros2unbag.cli.main import UNINSTALL_PACKAGES
 
 
 class CliMetadataTests(unittest.TestCase):

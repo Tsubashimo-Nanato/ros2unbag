@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import unittest
 
-from ros2_unbag.core.models import MessageRecord
-from ros2_unbag.core.topic_indexer import TimestampIndex
+from ros2unbag.core.models import MessageRecord
+from ros2unbag.core.topic_indexer import TimestampIndex
 
 
 class TimestampIndexTests(unittest.TestCase):

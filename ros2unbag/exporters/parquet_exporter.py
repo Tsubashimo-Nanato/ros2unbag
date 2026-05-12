@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ros2_unbag.core.manifest import sanitize_topic_name
-from ros2_unbag.core.models import ExportResult
-from ros2_unbag.exporters.tabular import collect_tabular_topic_data
+from ros2unbag.core.manifest import sanitize_topic_name
+from ros2unbag.core.models import ExportResult
+from ros2unbag.core.progress import ProgressCallback
+from ros2unbag.exporters.tabular import collect_tabular_topic_data
 
 
 def export_topic_parquet(
@@ -13,6 +14,7 @@ def export_topic_parquet(
     out_dir: str | Path,
     *,
     bag_start_timestamp_ns: int | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> ExportResult:
     """Export one topic as flattened Parquet rows using pandas + pyarrow."""
     import pandas as pd
@@ -24,6 +26,7 @@ def export_topic_parquet(
         reader,
         topic,
         bag_start_timestamp_ns=bag_start_timestamp_ns,
+        progress_callback=progress_callback,
     )
     frame = pd.DataFrame(data.rows, columns=data.fieldnames)
     frame.to_parquet(output_path, engine="pyarrow", index=False)
@@ -37,3 +40,4 @@ def export_topic_parquet(
         last_timestamp_ns=data.last_timestamp_ns,
         warnings=data.warnings,
     )
+

@@ -7,10 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ros2_unbag.core.models import MessageRecord
-from ros2_unbag.core.point_cloud import point_cloud_rows
-from ros2_unbag.core.session import _coverage_warnings
-from ros2_unbag.exporters.csv_exporter import export_topic_csv
+from ros2unbag.core.models import MessageRecord
+from ros2unbag.core.point_cloud import point_cloud_rows
+from ros2unbag.core.session import _coverage_warnings
+from ros2unbag.exporters.csv_exporter import export_topic_csv
 
 
 @dataclasses.dataclass

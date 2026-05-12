@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ros2_unbag.core.models import MessageRecord
-from ros2_unbag.exporters.image_exporter import export_topic_images
-from ros2_unbag.exporters.video_exporter import export_topic_video
+from ros2unbag.core.models import MessageRecord
+from ros2unbag.exporters.image_exporter import export_topic_images
+from ros2unbag.exporters.video_exporter import export_topic_video
 
 
 @dataclasses.dataclass
@@ -40,12 +40,14 @@ class ImageExportTests(unittest.TestCase):
         ]
 
         with tempfile.TemporaryDirectory() as temp_dir:
+            progress_updates: list[int] = []
             result = export_topic_images(
                 FakeReader(records),
                 topic,
                 Path(temp_dir),
                 image_format="png",
                 bag_start_timestamp_ns=50,
+                progress_callback=progress_updates.append,
             )
             output_dir = Path(result.output_path)
             with (output_dir / "timestamps.csv").open(newline="", encoding="utf-8") as handle:
@@ -56,6 +58,7 @@ class ImageExportTests(unittest.TestCase):
             self.assertEqual(rows[0]["timestamp_ns"], "100")
             self.assertEqual(rows[0]["timestamp_sec_from_start"], "5e-08")
             self.assertEqual(rows[1]["filename"], "000001.png")
+            self.assertEqual(progress_updates, [1, 1])
 
     def test_mp4_export_writes_video_and_timestamp_csv(self) -> None:
         topic = "/camera/image_raw"

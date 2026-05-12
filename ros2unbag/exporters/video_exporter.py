@@ -3,10 +3,11 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from ros2_unbag.core.decoder import ImageFrame
-from ros2_unbag.core.manifest import sanitize_topic_name
-from ros2_unbag.core.models import ExportResult
-from ros2_unbag.exporters.image_exporter import _decode_record_frame
+from ros2unbag.core.decoder import ImageFrame
+from ros2unbag.core.manifest import sanitize_topic_name
+from ros2unbag.core.models import ExportResult
+from ros2unbag.core.progress import ProgressCallback, advance_progress
+from ros2unbag.exporters.image_exporter import _decode_record_frame
 
 
 def export_topic_video(
@@ -17,6 +18,7 @@ def export_topic_video(
     fps: float = 30.0,
     bag_start_timestamp_ns: int | None = None,
     mode: str = "constant_fps",
+    progress_callback: ProgressCallback | None = None,
 ) -> ExportResult:
     """Export image messages to MP4 with a true timestamp CSV sidecar."""
     if fps <= 0:
@@ -65,6 +67,7 @@ def export_topic_video(
                     image = _image_for_video(frame)
                 except Exception as exc:
                     warnings.append(f"Skipped message at {record.timestamp_ns}: {exc}")
+                    advance_progress(progress_callback)
                     continue
                 warnings.extend(frame.warnings)
                 current_size = (int(image.shape[1]), int(image.shape[0]))
@@ -78,6 +81,7 @@ def export_topic_video(
                     warnings.append(
                         f"Skipped frame at {record.timestamp_ns}: size {current_size} != {frame_size}"
                     )
+                    advance_progress(progress_callback)
                     continue
                 writer.write(image)
                 csv_writer.writerow(
@@ -94,6 +98,7 @@ def export_topic_video(
                     }
                 )
                 frame_count += 1
+                advance_progress(progress_callback)
         finally:
             if writer is not None:
                 writer.release()
@@ -131,3 +136,4 @@ def _sec_from_start(timestamp_ns: int, bag_start_timestamp_ns: int | None) -> fl
     if bag_start_timestamp_ns is None:
         return None
     return (timestamp_ns - bag_start_timestamp_ns) / 1e9
+

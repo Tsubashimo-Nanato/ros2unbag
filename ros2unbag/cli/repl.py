@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -11,7 +11,8 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.history import FileHistory
 
-from ros2_unbag.cli.render import (
+from ros2unbag.cli.progress import progress_task
+from ros2unbag.cli.render import (
     console,
     render_export_result,
     render_export_results,
@@ -20,8 +21,8 @@ from ros2_unbag.cli.render import (
     render_topic_duration,
     render_warnings,
 )
-from ros2_unbag.core.manifest import write_manifest, write_topics_csv
-from ros2_unbag.core.session import ALL_EXPORTS, Session
+from ros2unbag.core.manifest import write_manifest, write_topics_csv
+from ros2unbag.core.session import ALL_EXPORTS, Session
 
 COMMANDS = [
     "open",
@@ -193,7 +194,9 @@ def _handle_open(session: Session, args: list[str]) -> None:
     if not positionals:
         raise ValueError("Usage: open BAG_PATH")
     backend = _option(options, "--backend") or session.backend
-    topics = session.open_bag(positionals[0], backend=backend)
+    with progress_task("Opening bag", None) as advance:
+        topics = session.open_bag(positionals[0], backend=backend)
+        advance()
     console.print(f"Opened [bold]{session.bag_path}[/bold] ({len(topics)} topics).")
     render_warnings(list(getattr(session.reader, "warnings", [])) if session.reader else [])
 
@@ -202,8 +205,10 @@ def _handle_scan(session: Session, args: list[str]) -> None:
     positionals, options = _parse_args(args)
     if positionals:
         backend = _option(options, "--backend") or session.backend
-        session.open_bag(positionals[0], backend=backend)
-    manifest = session.scan()
+        with progress_task("Opening bag", None) as advance:
+            session.open_bag(positionals[0], backend=backend)
+            advance()
+    manifest = session.scan(progress_factory=progress_task)
     render_scan_view(manifest.topics, view=_option(options, "--view", "-v") or "table")
     render_warnings(manifest.warnings)
     out = _option(options, "--out", "-o")
@@ -229,7 +234,7 @@ def _handle_export(session: Session, args: list[str]) -> None:
     fps = float(_option(options, "--fps") or 30.0)
     if topic is None or fmt is None or out is None:
         raise ValueError("Usage: export TOPIC --format FORMAT --out OUT_DIR [--fps FPS]")
-    result = session.export_topic(topic, fmt, out, fps=fps)
+    result = session.export_topic(topic, fmt, out, fps=fps, progress_factory=progress_task)
     render_export_result(result)
 
 
@@ -238,7 +243,7 @@ def _handle_export_all(session: Session, args: list[str]) -> None:
     out = _option(options, "--out", "-o")
     if out is None:
         raise ValueError("Usage: export-all --out OUT_DIR")
-    manifest, results = session.export_all(out)
+    manifest, results = session.export_all(out, progress_factory=progress_task)
     render_export_results(results)
     render_warnings(manifest.warnings)
     console.print(f"Wrote [bold]{Path(out) / 'manifest.json'}[/bold]")
@@ -249,7 +254,10 @@ def _handle_inspect(session: Session, args: list[str]) -> None:
     raw_time = _option(options, "--time")
     if raw_time is None:
         raise ValueError("Usage: inspect --time SECONDS")
-    target_ns, results, warnings = session.inspect_time(float(raw_time))
+    target_ns, results, warnings = session.inspect_time(
+        float(raw_time),
+        progress_factory=progress_task,
+    )
     render_inspect_results(target_ns, results, warnings)
 
 
@@ -257,7 +265,7 @@ def _handle_duration(session: Session, args: list[str]) -> None:
     positionals, _options = _parse_args(args)
     if not positionals:
         raise ValueError("Usage: dur TOPIC")
-    render_topic_duration(session.topic_duration(positionals[0]))
+    render_topic_duration(session.topic_duration(positionals[0], progress_factory=progress_task))
 
 
 def render_repl_help() -> None:
@@ -361,3 +369,4 @@ def _complete_paths(current: str) -> Iterable[Completion]:
         if directory != Path("."):
             replacement = str(directory / replacement)
         yield Completion(replacement, start_position=-len(current))
+

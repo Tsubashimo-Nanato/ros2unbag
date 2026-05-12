@@ -1,12 +1,13 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import csv
 import json
 from pathlib import Path
 
-from ros2_unbag.core.decoder import message_to_plain
-from ros2_unbag.core.manifest import sanitize_topic_name
-from ros2_unbag.core.models import ExportResult
+from ros2unbag.core.decoder import message_to_plain
+from ros2unbag.core.manifest import sanitize_topic_name
+from ros2unbag.core.models import ExportResult
+from ros2unbag.core.progress import ProgressCallback, advance_progress
 
 
 def export_topic_raw(
@@ -15,6 +16,7 @@ def export_topic_raw(
     out_dir: str | Path,
     *,
     bag_start_timestamp_ns: int | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> ExportResult:
     """Write message payloads to one binary stream plus a seekable CSV index."""
     output_dir = Path(out_dir) / "raw"
@@ -71,6 +73,7 @@ def export_topic_raw(
             )
             byte_offset += len(payload)
             count += 1
+            advance_progress(progress_callback)
 
     return ExportResult(
         topic=topic,
@@ -87,3 +90,4 @@ def _sec_from_start(timestamp_ns: int, bag_start_timestamp_ns: int | None) -> fl
     if bag_start_timestamp_ns is None:
         return None
     return (timestamp_ns - bag_start_timestamp_ns) / 1e9
+

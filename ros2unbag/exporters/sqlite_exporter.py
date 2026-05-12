@@ -5,10 +5,11 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from ros2_unbag.core.decoder import message_to_plain
-from ros2_unbag.core.manifest import sanitize_topic_name
-from ros2_unbag.core.models import ExportResult
-from ros2_unbag.exporters.tabular import collect_tabular_topic_data
+from ros2unbag.core.decoder import message_to_plain
+from ros2unbag.core.manifest import sanitize_topic_name
+from ros2unbag.core.models import ExportResult
+from ros2unbag.core.progress import ProgressCallback
+from ros2unbag.exporters.tabular import collect_tabular_topic_data
 
 
 def export_topic_sqlite(
@@ -17,6 +18,7 @@ def export_topic_sqlite(
     out_dir: str | Path,
     *,
     bag_start_timestamp_ns: int | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> ExportResult:
     """Export one topic into a reusable SQLite session database."""
     output_dir = Path(out_dir) / "sqlite"
@@ -26,6 +28,7 @@ def export_topic_sqlite(
         reader,
         topic,
         bag_start_timestamp_ns=bag_start_timestamp_ns,
+        progress_callback=progress_callback,
     )
     table_name = _topic_table_name(topic)
     msgtype = _first_msgtype(reader, topic) or ""
@@ -262,3 +265,4 @@ def _sqlite_value(value: Any) -> Any:
     if isinstance(value, (str, int, float)) or value is None:
         return value
     return json.dumps(message_to_plain(value), sort_keys=True, separators=(",", ":"))
+

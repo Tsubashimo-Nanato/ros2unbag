@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from .decoder import summarize_message
 from .models import MessageRecord, TopicInfo
+from .progress import ProgressCallback
 from .topic_indexer import NearestMessage, build_timestamp_index
 
 
@@ -23,11 +24,12 @@ def inspect_time(
     *,
     relative_time_sec: float | None = None,
     absolute_timestamp_ns: int | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[int, list[InspectResult]]:
     if absolute_timestamp_ns is None and relative_time_sec is None:
         raise ValueError("relative_time_sec or absolute_timestamp_ns is required")
 
-    index = build_timestamp_index(reader)
+    index = build_timestamp_index(reader, progress_callback=progress_callback)
     if absolute_timestamp_ns is None:
         if index.global_start_timestamp_ns is None:
             raise ValueError("Cannot inspect an empty bag")

@@ -1,11 +1,12 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import csv
 from pathlib import Path
 
-from ros2_unbag.core.manifest import sanitize_topic_name
-from ros2_unbag.core.models import ExportResult
-from ros2_unbag.exporters.tabular import collect_tabular_topic_data
+from ros2unbag.core.manifest import sanitize_topic_name
+from ros2unbag.core.models import ExportResult
+from ros2unbag.core.progress import ProgressCallback
+from ros2unbag.exporters.tabular import collect_tabular_topic_data
 
 
 def export_topic_csv(
@@ -14,6 +15,7 @@ def export_topic_csv(
     out_dir: str | Path,
     *,
     bag_start_timestamp_ns: int | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> ExportResult:
     output_dir = Path(out_dir) / "csv"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -22,6 +24,7 @@ def export_topic_csv(
         reader,
         topic,
         bag_start_timestamp_ns=bag_start_timestamp_ns,
+        progress_callback=progress_callback,
     )
     with output_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=data.fieldnames, extrasaction="ignore")
@@ -44,3 +47,4 @@ def _csv_warnings(warnings: list[str]) -> list[str]:
         warning.replace("tabular export", "CSV").replace("Tabular export", "CSV")
         for warning in warnings
     ]
+

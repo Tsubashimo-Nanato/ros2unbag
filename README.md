@@ -1,14 +1,18 @@
 # ros2unbag
 
+Unbag your ROS2 bags in Windows!
+
 `ros2unbag` is a Windows-based Python command-line tool for inspecting ROS bag files offline. It reads bags without having to play them on Linux, lists topics and message types, builds timestamp indexes, classifies topics into practical export categories, and exports selected data into Windows-readable formats.
+
+This tool is oriented toward researchers who prefer working in Windows rather than moving every bag-inspection task into a Linux ROS environment. It is designed for quickly extracting bag data into practical analysis formats such as CSV, Parquet, SQLite, PNG/JPG image sequences, MP4 video, JSONL, and raw serialized dumps.
 
 ## Status
 
-Current release: `v1.2.2`
+Current release: `v1.3.0`
 
-Release preparation date: 2026-05-11
+Release preparation date: 2026-05-12
 
-This project has been publicly released and is currently maintained at version `1.2.2`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.3.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -29,6 +33,7 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - Timestamp sidecar CSV files for image, video, and raw exports.
 - Raw serialized dumps for unsupported or undecoded topics.
 - Interactive REPL shell with command history and tab completion.
+- Non-flooding Rich progress display for bag opening and progress bars for scan/indexing, exports, image sequence output, and MP4 video output.
 
 ## Installation
 
@@ -38,7 +43,7 @@ From this repository:
 py -m pip install -e .
 ```
 
-The distribution name is `ros2unbag`, the installed command is `ros2unbag`, and the Python import package is `ros2_unbag`.
+The distribution name, installed command, and Python import package are all `ros2unbag`.
 
 Uninstall:
 
@@ -55,7 +60,7 @@ ros2unbag uninstall --print-only
 If `ros2unbag` is not on `PATH`, use Python directly:
 
 ```powershell
-py -m ros2_unbag.cli.main uninstall --yes
+py -m ros2unbag.cli.main uninstall --yes
 ```
 
 ## Interactive Mode
@@ -104,6 +109,8 @@ Interactive commands:
 - `exit` or `quit`
 
 The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--format`, `--out`, `--time`, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
+
+Long-running REPL commands render a single live progress display when the terminal supports it. The progress display is transient, so it does not add one printed line per message.
 
 ## Command-Line Usage
 
@@ -181,6 +188,8 @@ ros2unbag --install-completion powershell
 ros2unbag --show-completion powershell
 ```
 
+Long-running command-line operations render a single Rich progress display instead of printing per-message status lines. Progress is shown for bag opening, full scans, timestamp indexing used by `inspect` and `dur`, single-topic exports, `export-all`, image sequence output, and MP4 video output. If the output is redirected or the terminal does not support live rendering, progress output is disabled.
+
 ## Example Workflow
 
 ```powershell
@@ -254,7 +263,7 @@ Planned:
 |- README.md
 |- SECURITY.md
 |- pyproject.toml
-|- ros2_unbag/
+|- ros2unbag/
 `- tests/
 ```
 
@@ -271,6 +280,7 @@ The source package contains `cli/`, `core/`, `exporters/`, and an intentionally 
 - MP4 export currently supports constant-FPS output only. Use the generated timestamp CSV for true ROS timing.
 - SQLite export stores flattened message rows. Complex nested values that do not map cleanly to scalar columns are stored as JSON strings.
 - The GUI timeline viewer is not implemented yet.
+- Progress totals depend on message counts reported by the bag backend. If a backend cannot provide a count, `ros2unbag` shows an indeterminate activity display instead of a percentage.
 - Custom message support depends on what `rosbags` can deserialize from bag metadata. A future CLI option may accept custom `.msg` or `.idl` definition paths.
 - ROS bags may contain camera images, sensor recordings, paths, or other private lab data. Review exported files before sharing them.
 

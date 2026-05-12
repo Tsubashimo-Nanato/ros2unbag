@@ -3,9 +3,10 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from ros2_unbag.core.decoder import ImageFrame, decode_compressed_image, decode_sensor_image
-from ros2_unbag.core.manifest import sanitize_topic_name
-from ros2_unbag.core.models import ExportResult
+from ros2unbag.core.decoder import ImageFrame, decode_compressed_image, decode_sensor_image
+from ros2unbag.core.manifest import sanitize_topic_name
+from ros2unbag.core.models import ExportResult
+from ros2unbag.core.progress import ProgressCallback, advance_progress
 
 
 def export_topic_images(
@@ -15,6 +16,7 @@ def export_topic_images(
     *,
     image_format: str,
     bag_start_timestamp_ns: int | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> ExportResult:
     """Export image messages as a PNG/JPG sequence with timestamps.csv."""
     fmt = image_format.lower()
@@ -54,12 +56,14 @@ def export_topic_images(
                 frame = _decode_record_frame(record)
             except Exception as exc:
                 warnings.append(f"Skipped message at {record.timestamp_ns}: {exc}")
+                advance_progress(progress_callback)
                 continue
             warnings.extend(frame.warnings)
             filename = f"{frame_count:06d}.{suffix}"
             image = _image_for_still(frame, suffix)
             if not cv2.imwrite(str(output_dir / filename), image):
                 warnings.append(f"cv2.imwrite failed for {filename}")
+                advance_progress(progress_callback)
                 continue
             writer.writerow(
                 {
@@ -75,6 +79,7 @@ def export_topic_images(
                 }
             )
             frame_count += 1
+            advance_progress(progress_callback)
 
     if source_count and frame_count != source_count:
         warnings.append(f"Exported {frame_count} frames from {source_count} source messages.")
@@ -115,3 +120,4 @@ def _sec_from_start(timestamp_ns: int, bag_start_timestamp_ns: int | None) -> fl
     if bag_start_timestamp_ns is None:
         return None
     return (timestamp_ns - bag_start_timestamp_ns) / 1e9
+

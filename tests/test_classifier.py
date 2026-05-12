@@ -1,10 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import dataclasses
 import unittest
 
-from ros2_unbag.core.models import MessageRecord, TopicInfo
-from ros2_unbag.core.type_classifier import classify_topic, suggested_exports_for_category
+from ros2unbag.core.models import MessageRecord, TopicInfo
+from ros2unbag.core.type_classifier import classify_topic, suggested_exports_for_category
 
 
 @dataclasses.dataclass

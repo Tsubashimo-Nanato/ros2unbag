@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from ros2_unbag.core.models import MessageRecord, TopicInfo
-from ros2_unbag.core.session import IMPLEMENTED_EXPORTS, run_export
-from ros2_unbag.exporters.parquet_exporter import export_topic_parquet
-from ros2_unbag.exporters.sqlite_exporter import export_topic_sqlite
+from ros2unbag.core.models import MessageRecord, TopicInfo
+from ros2unbag.core.session import IMPLEMENTED_EXPORTS, run_export
+from ros2unbag.exporters.parquet_exporter import export_topic_parquet
+from ros2unbag.exporters.sqlite_exporter import export_topic_sqlite
 
 
 @dataclasses.dataclass

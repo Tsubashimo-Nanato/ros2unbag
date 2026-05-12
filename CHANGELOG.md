@@ -2,6 +2,20 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.3.0] - 2026-05-12
+
+Progress and package naming release.
+
+### Added
+
+- Rich progress display for bag opening and progress bars for scan/indexing, exports, image sequence output, and MP4 video output.
+- Shared progress callback plumbing for manifest scans, timestamp indexing, and all implemented exporters.
+
+### Changed
+
+- Renamed the Python import package from `ros2_unbag` to `ros2unbag` so the distribution, command, and import name match.
+- Removed the unused `tqdm` runtime dependency; progress rendering now uses the existing Rich dependency.
+
 ## [1.2.2] - 2026-05-11
 
 Bugfix and export robustness release.

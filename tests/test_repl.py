@@ -1,12 +1,12 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import unittest
 
 from prompt_toolkit.document import Document
 
-from ros2_unbag.cli.repl import Ros2UnbagCompleter, split_repl_line
-from ros2_unbag.core.models import TopicInfo
-from ros2_unbag.core.session import Session
+from ros2unbag.cli.repl import Ros2UnbagCompleter, split_repl_line
+from ros2unbag.core.models import TopicInfo
+from ros2unbag.core.session import Session
 
 
 class ReplTests(unittest.TestCase):

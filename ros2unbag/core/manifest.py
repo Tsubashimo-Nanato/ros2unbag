@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .decoder import summarize_samples
 from .models import Manifest, MessageRecord, TopicInfo
+from .progress import ProgressCallback, advance_progress
 from .type_classifier import classify_topic, suggested_exports_for_category
 
 
@@ -23,7 +24,12 @@ def sanitize_topic_name(topic_name: str) -> str:
     return base
 
 
-def build_manifest(reader: object, *, sample_per_topic: int = 3) -> Manifest:
+def build_manifest(
+    reader: object,
+    *,
+    sample_per_topic: int = 3,
+    progress_callback: ProgressCallback | None = None,
+) -> Manifest:
     """Scan all messages once to collect counts, timestamps, samples, and warnings."""
     topics = {topic.name: topic for topic in reader.get_topics()}
     counts: dict[str, int] = {topic_name: 0 for topic_name in topics}
@@ -47,6 +53,7 @@ def build_manifest(reader: object, *, sample_per_topic: int = 3) -> Manifest:
             bag_start = record.timestamp_ns
         if bag_end is None or record.timestamp_ns > bag_end:
             bag_end = record.timestamp_ns
+        advance_progress(progress_callback)
 
     for topic_name in sorted(topics):
         info = topics[topic_name]

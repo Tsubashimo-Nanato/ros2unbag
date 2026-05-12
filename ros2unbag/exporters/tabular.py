@@ -5,8 +5,9 @@ import dataclasses
 import hashlib
 from typing import Any
 
-from ros2_unbag.core.decoder import flatten_message
-from ros2_unbag.core.point_cloud import point_cloud_field_names, point_cloud_rows
+from ros2unbag.core.decoder import flatten_message
+from ros2unbag.core.point_cloud import point_cloud_field_names, point_cloud_rows
+from ros2unbag.core.progress import ProgressCallback, advance_progress
 
 
 METADATA_FIELDS = ["timestamp_ns", "timestamp_sec_from_start", "topic"]
@@ -27,6 +28,7 @@ def collect_tabular_topic_data(
     topic: str,
     *,
     bag_start_timestamp_ns: int | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> TabularTopicData:
     rows: list[dict[str, Any]] = []
     fieldnames: set[str] = set(METADATA_FIELDS)
@@ -54,6 +56,7 @@ def collect_tabular_topic_data(
                 row.update(point_row)
                 rows.append(row)
                 fieldnames.update(row)
+            advance_progress(progress_callback)
             continue
         if record.decoded is not None:
             row = dict(base_row)
@@ -67,6 +70,7 @@ def collect_tabular_topic_data(
             row.update(_raw_tabular_fields(record.raw))
         rows.append(row)
         fieldnames.update(row)
+        advance_progress(progress_callback)
 
     if rows and source_message_count != len(rows):
         warnings.append(
@@ -105,3 +109,4 @@ def _raw_tabular_fields(raw: bytes | None) -> dict[str, Any]:
     if len(raw) <= 4096:
         fields["raw_base64"] = base64.b64encode(raw).decode("ascii")
     return fields
+

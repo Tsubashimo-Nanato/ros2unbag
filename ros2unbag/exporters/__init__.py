@@ -1,4 +1,4 @@
-﻿"""Export backends for ros2unbag."""
+"""Export backends for ros2unbag."""
 
 from .csv_exporter import export_topic_csv
 from .image_exporter import export_topic_images

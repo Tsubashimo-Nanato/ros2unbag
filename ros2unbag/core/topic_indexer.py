@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from .models import MessageRecord
+from .progress import ProgressCallback, advance_progress
 
 
 @dataclass(slots=True)
@@ -83,7 +84,15 @@ class TimestampIndex:
         )
 
 
-def build_timestamp_index(reader: object, topics: list[str] | None = None) -> TimestampIndex:
+def build_timestamp_index(
+    reader: object,
+    topics: list[str] | None = None,
+    *,
+    progress_callback: ProgressCallback | None = None,
+) -> TimestampIndex:
     index = TimestampIndex()
-    index.extend(reader.iter_messages(topics=topics))
+    for record in reader.iter_messages(topics=topics):
+        index.add(record)
+        advance_progress(progress_callback)
+    index.finalize()
     return index
