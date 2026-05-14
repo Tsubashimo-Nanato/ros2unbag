@@ -46,8 +46,8 @@ COMMANDS = [
 
 OPTIONS_BY_COMMAND = {
     "open": ["--backend"],
-    "scan": ["-v", "--view", "-o", "--out", "--backend"],
-    "topics": ["-v", "--view"],
+    "scan": ["--all", "-all", "--out", "-o"],
+    "topics": ["-all", "--all", "-s", "--select"],
     "export": ["--topic", "-t", "--format", "-f", "--out", "-o", "--fps"],
     "export-select": ["--topic", "-t", "--format", "-f", "--out", "-o", "--fps"],
     "export-all": ["--out", "-o"],
@@ -72,6 +72,7 @@ VALUE_OPTIONS = {
     "-v",
 }
 FLAG_OPTIONS = {"--absolute-ns"}
+FLAG_OPTIONS.update({"--all", "-all", "--select", "-s"})
 
 
 def run_repl() -> None:
@@ -220,6 +221,10 @@ def _option(options: dict[str, str], *names: str) -> str | None:
     return None
 
 
+def _flag(options: dict[str, str], *names: str) -> bool:
+    return any(name in options for name in names)
+
+
 def _handle_open(session: Session, args: list[str]) -> None:
     positionals, options = _parse_args(args)
     if not positionals:
@@ -235,12 +240,11 @@ def _handle_open(session: Session, args: list[str]) -> None:
 def _handle_scan(session: Session, args: list[str]) -> None:
     positionals, options = _parse_args(args)
     if positionals:
-        backend = _option(options, "--backend") or session.backend
         with progress_task("Opening bag", None) as advance:
-            session.open_bag(positionals[0], backend=backend)
+            session.open_bag(positionals[0])
             advance()
     manifest = session.scan(progress_factory=progress_task)
-    render_scan_view(manifest.topics, view=_option(options, "--view", "-v") or "table")
+    render_scan_view(manifest.topics, view="all")
     render_warnings(manifest.warnings)
     out = _option(options, "--out", "-o")
     if out:
@@ -254,7 +258,15 @@ def _handle_scan(session: Session, args: list[str]) -> None:
 
 def _handle_topics(session: Session, args: list[str]) -> None:
     _positionals, options = _parse_args(args)
-    render_scan_view(session.list_topics(), view=_option(options, "--view", "-v") or "table")
+    if _flag(options, "--select", "-s"):
+        render_scan_view(session.list_topics(), view="select")
+        return
+    if _flag(options, "--all", "-all"):
+        manifest = session.scan(progress_factory=progress_task)
+        render_scan_view(manifest.topics, view="all")
+        render_warnings(manifest.warnings)
+        return
+    render_scan_view(session.list_topics(), view="tree")
 
 
 def _handle_export(session: Session, args: list[str]) -> None:
@@ -403,8 +415,10 @@ def _handle_duration(session: Session, args: list[str]) -> None:
 def render_repl_help() -> None:
     console.print("Commands:")
     console.print("  open BAG_PATH [--backend auto|rosbags|sqlite]")
-    console.print("  scan [BAG_PATH] [--view table|tree|nav] [--out OUT_DIR]")
-    console.print("  topics [--view table|tree|nav]")
+    console.print("  scan [BAG_PATH] [--all] [--out OUT_DIR]")
+    console.print("  topics")
+    console.print("  topics -all")
+    console.print("  topics -s")
     console.print("  dur TOPIC")
     console.print("  inspect --time SECONDS [--dur TOPIC] [--absolute-ns]")
     console.print("  export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]")
@@ -502,12 +516,14 @@ class Ros2UnbagCompleter(Completer):
         if command == "scan":
             if not positionals and (self.session.reader is None or current):
                 yield from _complete_paths(current)
+            elif not positionals and not options and not current:
+                yield from _complete_option_values(["--all"], current)
             else:
                 yield from _complete_option_values(_available_options(command, args), current)
             return
         if command == "topics":
             if not positionals and not options and not current:
-                yield from _complete_option_values(["-v"], current)
+                yield from _complete_option_values(["-all", "-s"], current)
             else:
                 yield from _complete_option_values(_available_options(command, args), current)
             return
@@ -636,6 +652,10 @@ def _paired_option(option: str) -> str:
         "-v": "--view",
         "--topic": "-t",
         "-t": "--topic",
+        "--all": "-all",
+        "-all": "--all",
+        "--select": "-s",
+        "-s": "--select",
     }
     return pairs.get(option, "")
 

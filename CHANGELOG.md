@@ -2,6 +2,18 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.4.1] - 2026-05-14
+
+Shell and topic display cleanup release.
+
+### Changed
+
+- Simplified topic tree colors and removed repeated full path text from tree rows.
+- Highlighted topic names in orange in scan table and topic tree output.
+- Moved browsing variants to `topics`, with `topics`, `topics -all`, and `topics -s`.
+- Simplified `scan` to the full scan workflow and removed the scan backend/view options.
+- Updated REPL completion so `scan` suggests `--all` after a bag is open and `topics` suggests `-all` and `-s`.
+
 ## [1.4.0] - 2026-05-14
 
 Selected export and shell UX release.

@@ -125,12 +125,21 @@ class ReplTests(unittest.TestCase):
         self.assertIn("--time ", [item.text for item in inspect])
         self.assertIn("--dur ", [item.text for item in inspect])
 
-    def test_topics_completion_prefers_view_short_option(self) -> None:
+    def test_topics_completion_prefers_all_and_selector_options(self) -> None:
         completer = Ros2UnbagCompleter(Session())
 
         completions = list(completer.get_completions(Document("topics "), object()))
 
-        self.assertEqual([item.text for item in completions], ["-v "])
+        self.assertEqual([item.text for item in completions], ["-all ", "-s "])
+
+    def test_scan_completion_prefers_all_when_bag_is_open(self) -> None:
+        session = Session()
+        session.reader = object()  # type: ignore[assignment]
+        completer = Ros2UnbagCompleter(session)
+
+        completions = list(completer.get_completions(Document("scan "), object()))
+
+        self.assertEqual([item.text for item in completions], ["--all "])
 
     def test_inspect_duration_option_completes_topics(self) -> None:
         session = Session()

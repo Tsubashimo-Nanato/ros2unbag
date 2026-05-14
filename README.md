@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v1.4.0`
+Current release: `v1.4.1`
 
 Release preparation date: 2026-05-14
 
-This project has been publicly released and is currently maintained at version `1.4.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.4.1`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -84,8 +84,9 @@ Typical session:
 
 ```text
 ros2unbag> open .\my_bag
-ros2unbag> topics -v tree
-ros2unbag> scan
+ros2unbag> topics
+ros2unbag> topics -all
+ros2unbag> scan --all
 ros2unbag> dur /aiformula_perception/lane_line_publisher/lane_lines/center
 ros2unbag> inspect --time 25.0 --dur /camera/image_raw
 ros2unbag> export /aiformula_control/joy --format csv --out .\export
@@ -101,8 +102,10 @@ ros2unbag> exit
 Interactive commands:
 
 - `open BAG_PATH`
-- `scan [BAG_PATH] [-v table|tree|nav] [--out OUT_DIR]`
-- `topics [-v table|tree|nav]`
+- `scan [BAG_PATH] [--all] [--out OUT_DIR]`
+- `topics`
+- `topics -all`
+- `topics -s`
 - `dur TOPIC`
 - `export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]`
 - `export-select`
@@ -113,7 +116,7 @@ Interactive commands:
 - `clear`
 - `exit` or `quit`
 
-The REPL uses `prompt-toolkit`. Tab completes command names, options such as `-v`, `--format`, `--out`, `--time`, `--dur`, option values, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. For common workflows, Tab advances through the next expected parameter; for example, after completing an export topic it suggests `--format`, then format values, then `--out`. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
+The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--all`, `-all`, `-s`, `--format`, `--out`, `--time`, `--dur`, option values, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. For common workflows, Tab advances through the next expected parameter; for example, after completing an export topic it suggests `--format`, then format values, then `--out`. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
 
 Long-running REPL commands render a single live progress display when the terminal supports it. The progress display is transient, so it does not add one printed line per message. Pressing Ctrl+C interrupts the current action and returns to the shell instead of closing the shell.
 
@@ -130,7 +133,7 @@ Before the selected exports run, `ros2unbag` displays a confirmation table and a
 
 ## Command-Line Usage
 
-Scan a bag and print the topic table:
+Scan a bag and print the full detailed topic table:
 
 ```powershell
 ros2unbag scan .\my_bag
@@ -139,22 +142,22 @@ ros2unbag scan .\my_bag
 For a first pass on an unfamiliar bag, start with the topic tree:
 
 ```powershell
-ros2unbag scan .\my_bag --view tree
+ros2unbag topics .\my_bag
 ```
 
-The tree view is usually the fastest way to understand topic namespaces. Use `scan` with the default table view afterward when you need counts, durations, categories, and export suggestions.
+The tree view is usually the fastest way to understand topic namespaces. Use `topics -all` or `scan --all` afterward when you need counts, durations, categories, and export suggestions.
 
 The default scan view is a compact table. The first column is the topic leaf name, such as `cmd_vel`, and the second column is the parent topic path, such as `/aiformula_control/game_pad`.
 
-Other scan views:
+Topic display modes:
 
 ```powershell
-ros2unbag scan .\my_bag --view table
-ros2unbag scan .\my_bag --view tree
-ros2unbag scan .\my_bag --view nav
+ros2unbag topics .\my_bag
+ros2unbag topics .\my_bag -all
+ros2unbag topics .\my_bag -s
 ```
 
-Use `--view tree` to see the topic namespace structure. Use `--view nav` for an interactive browser where you enter `1`, `2`, `3`, and so on to open a namespace or topic, `b` or `back` to go up, and `q` or `quit` to exit.
+Use `topics` to see the namespace tree. Use `topics -all` for the detailed table. Use `topics -s` for an interactive browser where you enter `1`, `2`, `3`, and so on to open a namespace or topic, `b` or `back` to go up, and `q` or `quit` to exit.
 
 Scan and write `manifest.json` and `topics.csv`:
 
@@ -230,7 +233,7 @@ Long-running command-line operations render a single Rich progress display inste
 
 ```powershell
 py -m pip install -e .
-ros2unbag scan .\my_bag --view tree
+ros2unbag topics .\my_bag
 ros2unbag scan .\my_bag --out .\scan
 ros2unbag dur .\my_bag /camera/image_raw
 ros2unbag export .\my_bag --topic /camera/image_raw --format png --out .\export

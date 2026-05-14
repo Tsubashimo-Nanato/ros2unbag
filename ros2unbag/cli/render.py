@@ -19,20 +19,21 @@ from ros2unbag.core.topic_tree import (
 )
 
 console = Console()
+TOPIC_STYLE = "orange3"
 
 
 def render_scan_view(topics: list[TopicInfo], *, view: str) -> None:
     normalized = view.lower()
-    if normalized == "table":
+    if normalized in {"table", "all"}:
         render_scan_table(topics)
         return
     if normalized == "tree":
         render_topic_tree(topics)
         return
-    if normalized in {"nav", "browse", "interactive"}:
+    if normalized in {"nav", "browse", "interactive", "select"}:
         run_topic_navigator(topics)
         return
-    raise ValueError("scan --view must be one of: table, tree, nav")
+    raise ValueError("view must be one of: table, tree, nav/select")
 
 
 def render_scan_table(topics: list[TopicInfo]) -> None:
@@ -47,7 +48,8 @@ def render_scan_table(topics: list[TopicInfo]) -> None:
             _fit_cell(getter(topic), size).ljust(size)
             for _label, size, getter in columns
         ]
-        console.print("  ".join(cells), soft_wrap=False)
+        topic_cell = f"[{TOPIC_STYLE}]{escape(cells[0])}[/{TOPIC_STYLE}]"
+        console.print("  ".join([topic_cell, *cells[1:]]), soft_wrap=False)
 
 
 ScanColumn = tuple[str, int, Callable[[TopicInfo], str]]
@@ -103,7 +105,7 @@ def _fit_cell(value: object, width: int) -> str:
 
 def render_topic_tree(topics: list[TopicInfo]) -> None:
     root = build_topic_tree(topics)
-    tree = Tree(f"[cyan]/[/cyan]  [dim]({root.topic_count} topics)[/dim]")
+    tree = Tree(f"/  [dim]({root.topic_count} topics)[/dim]")
     _add_tree_children(tree, root)
     console.print(tree)
 
@@ -112,23 +114,17 @@ def _add_tree_children(parent_tree: Tree, node: TopicTreeNode) -> None:
     for name in sorted(node.children):
         child = node.children[name]
         if child.children:
-            label = (
-                f"[blue]{escape(name)}/[/blue]  "
-                f"[cyan]{escape(child.path)}[/cyan]  "
-                f"[dim]({child.topic_count} topics)[/dim]"
-            )
+            label = f"{escape(name)}/  [dim]({child.topic_count} topics)[/dim]"
             branch = parent_tree.add(label)
             if child.topic is not None:
                 branch.add(
-                    f"[bold green]{escape(child.name)}[/bold green]  "
-                    f"[cyan]{escape(child.path)}[/cyan]  "
+                    f"[bold {TOPIC_STYLE}]{escape(child.name)}[/bold {TOPIC_STYLE}]  "
                     f"[dim]{escape(format_topic_compact(child.topic))}[/dim]"
                 )
             _add_tree_children(branch, child)
         elif child.topic is not None:
             parent_tree.add(
-                f"[bold green]{escape(name)}[/bold green]  "
-                f"[cyan]{escape(child.topic.name)}[/cyan]  "
+                f"[bold {TOPIC_STYLE}]{escape(name)}[/bold {TOPIC_STYLE}]  "
                 f"[dim]{escape(format_topic_compact(child.topic))}[/dim]"
             )
 
@@ -138,21 +134,23 @@ def run_topic_navigator(topics: list[TopicInfo]) -> None:
     stack: list[TopicTreeNode] = [root]
     while True:
         node = stack[-1]
-        console.rule(f"[bold]Topic Browser[/bold] [cyan]{escape(node.path)}[/cyan]")
+        console.rule(f"[bold]Topic Browser[/bold] {escape(node.path)}")
         entries = [node.children[name] for name in sorted(node.children)]
         if not entries:
             console.print("[dim]No child topics here.[/dim]")
         for index, child in enumerate(entries, start=1):
             if child.children:
-                suffix = f"/ [cyan]{escape(child.path)}[/cyan] [dim]({child.topic_count} topics)[/dim]"
+                suffix = f"/ [dim]({child.topic_count} topics)[/dim]"
             else:
                 suffix = (
-                    f"  [cyan]{escape(child.topic.name)}[/cyan] "
-                    f"[dim]{escape(format_topic_compact(child.topic))}[/dim]"
+                    f"  [dim]{escape(format_topic_compact(child.topic))}[/dim]"
                     if child.topic
                     else ""
                 )
-            console.print(f"[bold]{index:>2}[/bold]  [green]{escape(child.name)}[/green]{suffix}")
+            name = escape(child.name)
+            if child.topic is not None and not child.children:
+                name = f"[{TOPIC_STYLE}]{name}[/{TOPIC_STYLE}]"
+            console.print(f"[bold]{index:>2}[/bold]  {name}{suffix}")
 
         console.print("[dim]Enter a number to open, b/back to go back, q/quit to exit.[/dim]")
         choice = console.input("> ").strip().lower()
@@ -179,8 +177,8 @@ def run_topic_navigator(topics: list[TopicInfo]) -> None:
 
 
 def render_topic_detail(topic: TopicInfo) -> None:
-    console.print(f"[bold green]{escape(topic_leaf_name(topic.name))}[/bold green]")
-    console.print(f"  path: [cyan]{escape(topic.name)}[/cyan]")
+    console.print(f"[bold {TOPIC_STYLE}]{escape(topic_leaf_name(topic.name))}[/bold {TOPIC_STYLE}]")
+    console.print(f"  path: {escape(topic.name)}")
     console.print(f"  type: {topic.msgtype}")
     console.print(f"  serialization: {topic.serialization_format or ''}")
     console.print(f"  count: {topic.message_count}")
@@ -197,7 +195,7 @@ def render_topic_detail(topic: TopicInfo) -> None:
 def render_opened_bag(path: str | Path, topic_count: int, *, backend: str) -> None:
     console.print(
         "[green]Opened bag[/green] "
-        f"[cyan]{escape(str(path))}[/cyan] "
+        f"{escape(str(path))} "
         f"[bold]({topic_count} topics, backend={escape(backend)})[/bold]",
         overflow="fold",
     )

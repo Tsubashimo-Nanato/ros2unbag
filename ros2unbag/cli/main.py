@@ -87,20 +87,23 @@ def _open_session_with_progress(session: Session, bag_path: Path) -> int:
 def scan(
     bag_path: Annotated[Path, typer.Argument(help="Bag folder, .db3 file, or supported bag file.")],
     out: Annotated[Path | None, typer.Option("--out", "-o", help="Optional output directory.")] = None,
-    view: Annotated[
-        str,
-        typer.Option("--view", "-v", help="Output view: table, tree, or nav."),
-    ] = "table",
-    backend: Annotated[
-        str, typer.Option(help="Backend: auto, rosbags, or sqlite.")
-    ] = "auto",
+    all_topics: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            "-all",
+            help="Scan all topics. This is the default behavior.",
+            show_default=False,
+        ),
+    ] = True,
 ) -> None:
     """Scan a bag and list topics, timestamps, categories, and export hints."""
-    session = Session(backend=backend)
+    _ = all_topics
+    session = Session()
     try:
         _open_session_with_progress(session, bag_path)
         manifest = session.scan(progress_factory=progress_task)
-        render_scan_view(manifest.topics, view=view)
+        render_scan_view(manifest.topics, view="all")
         render_warnings(manifest.warnings)
         if out is not None:
             out.mkdir(parents=True, exist_ok=True)
@@ -108,6 +111,34 @@ def scan(
             topics_path = write_topics_csv(manifest.topics, out / "topics.csv")
             console.print(f"Wrote [bold]{manifest_path}[/bold]")
             console.print(f"Wrote [bold]{topics_path}[/bold]")
+    finally:
+        session.close()
+
+
+@app.command("topics")
+def topics_command(
+    bag_path: Annotated[Path, typer.Argument(help="Bag folder, .db3 file, or supported bag file.")],
+    all_topics: Annotated[
+        bool,
+        typer.Option("--all", "-all", help="Show the full detailed topic table."),
+    ] = False,
+    select: Annotated[
+        bool,
+        typer.Option("--select", "-s", help="Open the interactive topic path selector."),
+    ] = False,
+) -> None:
+    """List bag topics as a tree, detailed table, or selector."""
+    session = Session()
+    try:
+        _open_session_with_progress(session, bag_path)
+        if select:
+            render_scan_view(session.list_topics(), view="select")
+        elif all_topics:
+            manifest = session.scan(progress_factory=progress_task)
+            render_scan_view(manifest.topics, view="all")
+            render_warnings(manifest.warnings)
+        else:
+            render_scan_view(session.list_topics(), view="tree")
     finally:
         session.close()
 
