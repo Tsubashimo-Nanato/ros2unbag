@@ -2,6 +2,15 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.3.2] - 2026-05-14
+
+Interactive shell completion release.
+
+### Changed
+
+- REPL tab completion now advances through the next expected arguments and options for common commands, such as `export TOPIC --format FORMAT --out OUT_DIR`.
+- REPL option completion now avoids suggesting options that are already present by either their short or long form.
+
 ## [1.3.1] - 2026-05-12
 
 Performance release.

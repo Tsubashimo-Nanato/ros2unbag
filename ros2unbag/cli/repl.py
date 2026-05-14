@@ -50,6 +50,20 @@ OPTIONS_BY_COMMAND = {
 }
 
 VIEW_CHOICES = ["table", "tree", "nav"]
+BACKEND_CHOICES = ["auto", "rosbags", "sqlite"]
+VALUE_OPTIONS = {
+    "--backend",
+    "--format",
+    "-f",
+    "--fps",
+    "--out",
+    "-o",
+    "--time",
+    "--topic",
+    "-t",
+    "--view",
+    "-v",
+}
 
 
 def run_repl() -> None:
@@ -303,6 +317,9 @@ class Ros2UnbagCompleter(Completer):
         if previous in {"--format", "-f"}:
             yield from _complete_values(sorted(ALL_EXPORTS), current)
             return
+        if previous in {"--topic", "-t"}:
+            yield from _complete_values(self._topic_names(), current)
+            return
         if previous in {"--view", "-v"}:
             yield from _complete_values(VIEW_CHOICES, current)
             return
@@ -310,21 +327,78 @@ class Ros2UnbagCompleter(Completer):
             return
         if previous in {"--out", "-o", "--backend"}:
             if previous == "--backend":
-                yield from _complete_values(["auto", "rosbags", "sqlite"], current)
+                yield from _complete_values(BACKEND_CHOICES, current)
             else:
                 yield from _complete_paths(current)
             return
         if current.startswith("-"):
-            yield from _complete_values(OPTIONS_BY_COMMAND.get(command, []), current)
+            yield from _complete_option_values(
+                _available_options(command, _completed_args(tokens[1:], current)),
+                current,
+            )
             return
-        if command in {"open", "scan"}:
-            yield from _complete_paths(current)
-            return
-        if command in {"export", "dur"}:
-            yield from _complete_values(self._topic_names(), current)
+
+        yield from self._complete_next_argument(command, tokens, current)
 
     def _topic_names(self) -> list[str]:
         return sorted(topic.name for topic in self.session.topics)
+
+    def _complete_next_argument(
+        self,
+        command: str,
+        tokens: list[str],
+        current: str,
+    ) -> Iterable[Completion]:
+        args = _completed_args(tokens[1:], current)
+        positionals, options, expecting_value = _completion_state(args)
+        if expecting_value is not None:
+            return
+
+        if command == "open":
+            if not positionals:
+                yield from _complete_paths(current)
+            else:
+                yield from _complete_option_values(_available_options(command, args), current)
+            return
+        if command == "scan":
+            if not positionals and (self.session.reader is None or current):
+                yield from _complete_paths(current)
+            else:
+                yield from _complete_option_values(_available_options(command, args), current)
+            return
+        if command == "topics":
+            yield from _complete_option_values(_available_options(command, args), current)
+            return
+        if command == "export":
+            if "--topic" in options or "-t" in options:
+                if "--format" not in options and "-f" not in options:
+                    yield from _complete_option_values(["--format"], current)
+                    return
+            elif not positionals:
+                yield from _complete_values(self._topic_names(), current)
+                return
+            elif "--format" not in options and "-f" not in options:
+                yield from _complete_option_values(["--format"], current)
+                return
+
+            if "--out" not in options and "-o" not in options:
+                yield from _complete_option_values(["--out"], current)
+                return
+            if _selected_format(options) == "mp4" and "--fps" not in options:
+                yield from _complete_option_values(["--fps"], current)
+            return
+        if command == "export-all":
+            if "--out" not in options and "-o" not in options:
+                yield from _complete_option_values(["--out"], current)
+            return
+        if command == "inspect":
+            if "--time" not in options:
+                yield from _complete_option_values(["--time"], current)
+            return
+        if command == "dur":
+            if not positionals:
+                yield from _complete_values(self._topic_names(), current)
+            return
 
 
 def _current_word(text: str) -> str:
@@ -345,10 +419,82 @@ def _completion_tokens(text: str) -> list[str]:
     return tokens
 
 
+def _completion_state(args: list[str]) -> tuple[list[str], dict[str, str | None], str | None]:
+    positionals: list[str] = []
+    options: dict[str, str | None] = {}
+    expecting_value: str | None = None
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token in VALUE_OPTIONS:
+            if index == len(args) - 1:
+                expecting_value = token
+                options[token] = None
+                break
+            options[token] = args[index + 1]
+            index += 2
+            continue
+        if token.startswith("--") and "=" in token:
+            key, value = token.split("=", 1)
+            options[key] = value
+            index += 1
+            continue
+        if token.startswith("-"):
+            options[token] = None
+            index += 1
+            continue
+        positionals.append(token)
+        index += 1
+    return positionals, options, expecting_value
+
+
+def _completed_args(args: list[str], current: str) -> list[str]:
+    if current:
+        return args[:-1]
+    if args and args[-1] == "":
+        return args[:-1]
+    return args
+
+
+def _available_options(command: str, args: list[str]) -> list[str]:
+    _positionals, used_options, _expecting_value = _completion_state(args)
+    options = OPTIONS_BY_COMMAND.get(command, [])
+    return [
+        option
+        for option in options
+        if option not in used_options and _paired_option(option) not in used_options
+    ]
+
+
+def _paired_option(option: str) -> str:
+    pairs = {
+        "--format": "-f",
+        "-f": "--format",
+        "--out": "-o",
+        "-o": "--out",
+        "--view": "-v",
+        "-v": "--view",
+        "--topic": "-t",
+        "-t": "--topic",
+    }
+    return pairs.get(option, "")
+
+
+def _selected_format(options: dict[str, str | None]) -> str | None:
+    value = options.get("--format") or options.get("-f")
+    return value.lower() if value else None
+
+
 def _complete_values(values: Iterable[str], current: str) -> Iterable[Completion]:
     for value in values:
         if value.startswith(current):
             yield Completion(value, start_position=-len(current))
+
+
+def _complete_option_values(values: Iterable[str], current: str) -> Iterable[Completion]:
+    for value in values:
+        if value.startswith(current):
+            yield Completion(f"{value} ", start_position=-len(current))
 
 
 def _complete_paths(current: str) -> Iterable[Completion]:

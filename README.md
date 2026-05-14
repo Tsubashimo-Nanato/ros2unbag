@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v1.3.1`
+Current release: `v1.3.2`
 
 Release preparation date: 2026-05-12
 
-This project has been publicly released and is currently maintained at version `1.3.1`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.3.2`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -32,7 +32,7 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - SQLite session export with topic metadata, message rows, export records, and per-topic flattened tables.
 - Timestamp sidecar CSV files for image, video, and raw exports.
 - Raw serialized dumps for unsupported or undecoded topics.
-- Interactive REPL shell with command history and tab completion.
+- Interactive REPL shell with command history and context-aware tab completion.
 - Non-flooding Rich progress display for bag opening and progress bars for scan/indexing, exports, image sequence output, and MP4 video output.
 - Metadata-based bag time bounds when available, avoiding a full-bag pre-index scan for single-topic exports.
 
@@ -109,7 +109,7 @@ Interactive commands:
 - `clear`
 - `exit` or `quit`
 
-The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--format`, `--out`, `--time`, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
+The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--format`, `--out`, `--time`, option values, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. For common workflows, Tab advances through the next expected parameter; for example, after completing an export topic it suggests `--format`, then format values, then `--out`. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
 
 Long-running REPL commands render a single live progress display when the terminal supports it. The progress display is transient, so it does not add one printed line per message.
 
