@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .bag_reader import BaseBagReader, open_bag_reader, time_bounds_from_topics
 from .manifest import build_manifest, write_manifest, write_topics_csv
-from .models import ExportResult, Manifest, TopicDuration, TopicInfo
+from .models import ExportResult, ExportSelection, Manifest, TopicDuration, TopicInfo
 from .progress import ProgressCallback
 from .sync import InspectResult, inspect_time as inspect_time_core
 from .topic_indexer import build_timestamp_index
@@ -118,27 +118,87 @@ class Session:
         progress_factory: ProgressFactory | None = None,
     ) -> ExportResult:
         reader = self._require_reader()
-        fmt = validate_export_format(fmt)
-        if fmt in FUTURE_EXPORTS:
-            raise ValueError(FUTURE_EXPORTS[fmt])
-        topics_by_name = {item.name: item for item in self.list_topics()}
-        topic_info = topics_by_name.get(topic)
-        if topic_info is None:
-            raise ValueError(f"Topic not found: {topic}")
-        validate_topic_export_format(topic_info, fmt)
+        selection = self.prepare_export_selection(topic, fmt, out_dir, fps=fps)
         bag_start_ns, bag_end_ns = self._bag_time_bounds(progress_factory=progress_factory)
         result = self._run_export_with_progress(
             reader,
-            topic=topic,
-            fmt=fmt,
-            out=Path(out_dir),
+            topic=selection.topic,
+            fmt=selection.format,
+            out=Path(selection.out_dir),
             bag_start_timestamp_ns=bag_start_ns,
-            fps=fps,
+            fps=selection.fps,
             progress_factory=progress_factory,
         )
         result.warnings.extend(_coverage_warnings(result, bag_start_ns, bag_end_ns))
         result.warnings = sorted(set(result.warnings))
         return result
+
+    def prepare_export_selection(
+        self,
+        topic: str,
+        fmt: str,
+        out_dir: str | Path,
+        *,
+        fps: float = 30.0,
+    ) -> ExportSelection:
+        normalized_format = validate_export_format(fmt)
+        if normalized_format in FUTURE_EXPORTS:
+            raise ValueError(FUTURE_EXPORTS[normalized_format])
+        resolved_topic = self._resolve_topic_name(topic)
+        topic_info = next(item for item in self.list_topics() if item.name == resolved_topic)
+        validate_topic_export_format(topic_info, normalized_format)
+        return ExportSelection(
+            topic=resolved_topic,
+            format=normalized_format,
+            out_dir=str(Path(out_dir)),
+            fps=fps,
+        )
+
+    def export_selected(
+        self,
+        selections: list[ExportSelection],
+        *,
+        progress_factory: ProgressFactory | None = None,
+    ) -> list[ExportResult]:
+        reader = self._require_reader()
+        prepared = [
+            self.prepare_export_selection(
+                selection.topic,
+                selection.format,
+                selection.out_dir,
+                fps=selection.fps,
+            )
+            for selection in selections
+        ]
+        if not prepared:
+            return []
+
+        bag_start_ns, bag_end_ns = self._bag_time_bounds(progress_factory=progress_factory)
+        results: list[ExportResult] = []
+        for selection in prepared:
+            try:
+                result = self._run_export_with_progress(
+                    reader,
+                    topic=selection.topic,
+                    fmt=selection.format,
+                    out=Path(selection.out_dir),
+                    bag_start_timestamp_ns=bag_start_ns,
+                    fps=selection.fps,
+                    progress_factory=progress_factory,
+                )
+                result.warnings.extend(_coverage_warnings(result, bag_start_ns, bag_end_ns))
+                result.warnings = sorted(set(result.warnings))
+                results.append(result)
+            except Exception as exc:
+                results.append(
+                    ExportResult(
+                        topic=selection.topic,
+                        format=selection.format,
+                        output_path="",
+                        warnings=[f"Export failed: {exc}"],
+                    )
+                )
+        return results
 
     def export_all(
         self,

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ros2unbag.core.models import MessageRecord, TopicInfo
+from ros2unbag.core.models import ExportSelection, MessageRecord, TopicInfo
 from ros2unbag.core.session import Session
 
 
@@ -78,6 +78,22 @@ class SessionPerformanceTests(unittest.TestCase):
         self.assertFalse(reader.full_scan_requested)
         self.assertEqual(result.message_count, 2)
         self.assertEqual(rows[0]["timestamp_sec_from_start"], "5e-08")
+
+    def test_selected_exports_reuse_metadata_bounds(self) -> None:
+        reader = MetadataBoundedReader()
+        session = Session()
+        session.reader = reader  # type: ignore[assignment]
+        session.bag_path = Path("fake")
+        session.topics = reader.get_topics()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            results = session.export_selected(
+                [ExportSelection(topic="numbers", format="raw", out_dir=temp_dir)]
+            )
+
+        self.assertFalse(reader.full_scan_requested)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].message_count, 2)
 
 
 if __name__ == "__main__":

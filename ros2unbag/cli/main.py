@@ -12,6 +12,7 @@ from ros2unbag.cli.render import (
     render_export_result,
     render_export_results,
     render_inspect_results,
+    render_opened_bag,
     render_scan_view,
     render_topic_duration,
     render_warnings,
@@ -75,10 +76,11 @@ def main(ctx: typer.Context) -> None:
         raise typer.Exit()
 
 
-def _open_session_with_progress(session: Session, bag_path: Path) -> None:
+def _open_session_with_progress(session: Session, bag_path: Path) -> int:
     with progress_task("Opening bag", None) as advance:
-        session.open_bag(bag_path)
+        topics = session.open_bag(bag_path)
         advance()
+    return len(topics)
 
 
 @app.command()
@@ -167,13 +169,40 @@ def export_all(
         session.close()
 
 
+@app.command("export-select")
+def export_select(
+    bag_path: Annotated[Path, typer.Argument(help="Bag folder, .db3 file, or supported bag file.")],
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", "-o", help="Default output directory for selected exports."),
+    ] = None,
+    backend: Annotated[
+        str, typer.Option(help="Backend: auto, rosbags, or sqlite.")
+    ] = "auto",
+) -> None:
+    """Interactively queue selected topic exports, then confirm and run them."""
+    from ros2unbag.cli.repl import run_export_select
+
+    session = Session(backend=backend)
+    try:
+        topic_count = _open_session_with_progress(session, bag_path)
+        render_opened_bag(session.bag_path or bag_path, topic_count, backend=session.backend)
+        run_export_select(session, default_out=out)
+    finally:
+        session.close()
+
+
 @app.command("inspect")
 def inspect_command(
     bag_path: Annotated[Path, typer.Argument(help="Bag folder, .db3 file, or supported bag file.")],
     time: Annotated[
-        float,
+        float | None,
         typer.Option("--time", help="Seconds after bag start, unless --absolute-ns is set."),
-    ],
+    ] = None,
+    duration_topic: Annotated[
+        str | None,
+        typer.Option("--dur", help="Also show duration and bag-relative coverage for a topic."),
+    ] = None,
     absolute_ns: Annotated[
         bool,
         typer.Option("--absolute-ns", help="Interpret --time as an absolute nanosecond timestamp."),
@@ -182,16 +211,22 @@ def inspect_command(
         str, typer.Option(help="Backend: auto, rosbags, or sqlite.")
     ] = "auto",
 ) -> None:
-    """Show nearest message from every topic at a requested timestamp."""
+    """Inspect nearest messages and optionally show topic duration."""
+    if time is None and duration_topic is None:
+        raise typer.BadParameter("Provide --time SECONDS, --dur TOPIC, or both.")
+
     session = Session(backend=backend)
     try:
         _open_session_with_progress(session, bag_path)
-        target_ns, results, warnings = session.inspect_time(
-            time,
-            absolute_ns=absolute_ns,
-            progress_factory=progress_task,
-        )
-        render_inspect_results(target_ns, results, warnings)
+        if duration_topic is not None:
+            render_topic_duration(session.topic_duration(duration_topic, progress_factory=progress_task))
+        if time is not None:
+            target_ns, results, warnings = session.inspect_time(
+                time,
+                absolute_ns=absolute_ns,
+                progress_factory=progress_task,
+            )
+            render_inspect_results(target_ns, results, warnings)
     finally:
         session.close()
 

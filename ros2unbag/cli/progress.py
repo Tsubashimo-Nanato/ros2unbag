@@ -26,6 +26,7 @@ def progress_task(description: str, total: int | None) -> Iterator[ProgressCallb
         return
 
     normalized_total = total if total and total > 0 else None
+    interrupted_snapshot: tuple[int, int | None] | None = None
     columns: tuple[object, ...]
     if normalized_total is None:
         columns = (
@@ -40,21 +41,41 @@ def progress_task(description: str, total: int | None) -> Iterator[ProgressCallb
             TaskProgressColumn(),
             MofNCompleteColumn(),
             TimeElapsedColumn(),
+            TextColumn("[dim]eta[/dim]"),
             TimeRemainingColumn(),
         )
 
-    with Progress(
-        *columns,
-        console=console,
-        transient=True,
-        refresh_per_second=8,
-    ) as progress:
-        task_id = progress.add_task(description, total=normalized_total)
+    try:
+        with Progress(
+            *columns,
+            console=console,
+            transient=True,
+            refresh_per_second=8,
+        ) as progress:
+            task_id = progress.add_task(description, total=normalized_total)
 
-        def advance(amount: int = 1) -> None:
-            progress.advance(task_id, amount)
+            def advance(amount: int = 1) -> None:
+                progress.advance(task_id, amount)
 
-        yield advance
+            try:
+                yield advance
+            except KeyboardInterrupt:
+                task = next(task for task in progress.tasks if task.id == task_id)
+                interrupted_snapshot = (
+                    int(task.completed),
+                    int(task.total) if task.total is not None else None,
+                )
+                raise
+    except KeyboardInterrupt:
+        if interrupted_snapshot is not None:
+            completed, task_total = interrupted_snapshot
+            if task_total is None:
+                console.print(f"[yellow]Interrupted:[/yellow] {description} after {completed} steps.")
+            else:
+                console.print(
+                    f"[yellow]Interrupted:[/yellow] {description} at {completed}/{task_total}."
+                )
+        raise
 
 
 def _noop_progress(_amount: int = 1) -> None:

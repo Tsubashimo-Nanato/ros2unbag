@@ -53,6 +53,14 @@ class ExportResult:
 
 
 @dataclass(slots=True)
+class ExportSelection:
+    topic: str
+    format: str
+    out_dir: str
+    fps: float = 30.0
+
+
+@dataclass(slots=True)
 class Manifest:
     source_bag_path: str
     created_at: str

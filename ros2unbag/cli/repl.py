@@ -4,24 +4,28 @@ import os
 from pathlib import Path
 import shlex
 import sys
-from typing import Iterable
+from typing import Callable, Iterable
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.history import FileHistory
+from rich.prompt import Confirm
 
 from ros2unbag.cli.progress import progress_task
 from ros2unbag.cli.render import (
     console,
+    render_export_plan,
     render_export_result,
     render_export_results,
     render_inspect_results,
+    render_opened_bag,
     render_scan_view,
     render_topic_duration,
     render_warnings,
 )
 from ros2unbag.core.manifest import write_manifest, write_topics_csv
+from ros2unbag.core.models import ExportSelection
 from ros2unbag.core.session import ALL_EXPORTS, Session, compatible_export_formats
 
 COMMANDS = [
@@ -30,6 +34,7 @@ COMMANDS = [
     "scan",
     "topics",
     "export",
+    "export-select",
     "export-all",
     "inspect",
     "dur",
@@ -41,11 +46,12 @@ COMMANDS = [
 
 OPTIONS_BY_COMMAND = {
     "open": ["--backend"],
-    "scan": ["--out", "-o", "--view", "-v", "--backend"],
-    "topics": ["--view", "-v"],
+    "scan": ["-v", "--view", "-o", "--out", "--backend"],
+    "topics": ["-v", "--view"],
     "export": ["--topic", "-t", "--format", "-f", "--out", "-o", "--fps"],
+    "export-select": ["--topic", "-t", "--format", "-f", "--out", "-o", "--fps"],
     "export-all": ["--out", "-o"],
-    "inspect": ["--time"],
+    "inspect": ["--time", "--dur", "--absolute-ns"],
     "dur": [],
 }
 
@@ -59,11 +65,13 @@ VALUE_OPTIONS = {
     "--out",
     "-o",
     "--time",
+    "--dur",
     "--topic",
     "-t",
     "--view",
     "-v",
 }
+FLAG_OPTIONS = {"--absolute-ns"}
 
 
 def run_repl() -> None:
@@ -139,6 +147,9 @@ def dispatch_repl_line(session: Session, line: str) -> bool:
         if command == "export":
             _handle_export(session, args)
             return False
+        if command == "export-select":
+            _handle_export_select(session, args)
+            return False
         if command == "export-all":
             _handle_export_all(session, args)
             return False
@@ -150,6 +161,8 @@ def dispatch_repl_line(session: Session, line: str) -> bool:
             return False
         console.print(f"[red]Unknown command:[/red] {command}")
         console.print("Type [bold]help[/bold] for available commands.")
+    except KeyboardInterrupt:
+        console.print("[yellow]Interrupted.[/yellow] Current action stopped; shell is still open.")
     except Exception as exc:
         console.print(f"[red]Error:[/red] {exc}")
     return False
@@ -185,6 +198,10 @@ def _parse_args(args: list[str]) -> tuple[list[str], dict[str, str]]:
             options[key] = value
             index += 1
             continue
+        if token in FLAG_OPTIONS:
+            options[token] = "true"
+            index += 1
+            continue
         if token.startswith("-"):
             if index + 1 >= len(args):
                 raise ValueError(f"Missing value for {token}")
@@ -211,7 +228,7 @@ def _handle_open(session: Session, args: list[str]) -> None:
     with progress_task("Opening bag", None) as advance:
         topics = session.open_bag(positionals[0], backend=backend)
         advance()
-    console.print(f"Opened [bold]{session.bag_path}[/bold] ({len(topics)} topics).")
+    render_opened_bag(session.bag_path or positionals[0], len(topics), backend=session.backend)
     render_warnings(list(getattr(session.reader, "warnings", [])) if session.reader else [])
 
 
@@ -252,6 +269,102 @@ def _handle_export(session: Session, args: list[str]) -> None:
     render_export_result(result)
 
 
+def _handle_export_select(session: Session, args: list[str]) -> None:
+    run_export_select(session, initial_args=args)
+
+
+def run_export_select(
+    session: Session,
+    *,
+    initial_args: list[str] | None = None,
+    default_out: str | Path | None = None,
+) -> None:
+    session.list_topics()
+    selections: list[ExportSelection] = []
+    if initial_args:
+        selections.append(_selection_from_args(session, initial_args, default_out=default_out))
+
+    console.print("[bold]Selected export mode[/bold]")
+    console.print(
+        "Enter lines like "
+        "[cyan]TOPIC --format csv --out .\\export[/cyan]. "
+        "Type [bold]export-all[/bold] to review and run, or [bold]cancel[/bold] to return."
+    )
+
+    prompt = _selection_prompt(session)
+    while True:
+        try:
+            line = prompt("select> ")
+        except KeyboardInterrupt:
+            console.print("[yellow]Selection input interrupted.[/yellow] Returning to shell.")
+            return
+        except EOFError:
+            return
+
+        stripped = line.strip()
+        if not stripped:
+            continue
+        lowered = stripped.lower()
+        if lowered in {"cancel", "q", "quit", "exit"}:
+            console.print("Selected export cancelled.")
+            return
+        if lowered in {"export-all", "done", "run"}:
+            if not selections:
+                console.print("[yellow]No topics have been selected yet.[/yellow]")
+                continue
+            render_export_plan(selections)
+            if not Confirm.ask("Export these selected topics?", default=False, console=console):
+                console.print("Selected export cancelled.")
+                return
+            results = session.export_selected(selections, progress_factory=progress_task)
+            render_export_results(results)
+            return
+
+        try:
+            selection = _selection_from_args(
+                session,
+                split_repl_line(stripped),
+                default_out=default_out,
+            )
+        except Exception as exc:
+            console.print(f"[red]Selection error:[/red] {exc}")
+            continue
+        selections.append(selection)
+        console.print(
+            "[green]Queued[/green] "
+            f"[cyan]{selection.topic}[/cyan] as [bold]{selection.format}[/bold] "
+            f"to [cyan]{selection.out_dir}[/cyan]",
+            overflow="fold",
+        )
+
+
+def _selection_prompt(session: Session) -> Callable[[str], str]:
+    if not sys.stdin.isatty():
+        return input
+    prompt_session = PromptSession(
+        history=FileHistory(".ros2unbag_history"),
+        completer=ExportSelectCompleter(session),
+        complete_while_typing=False,
+    )
+    return prompt_session.prompt
+
+
+def _selection_from_args(
+    session: Session,
+    args: list[str],
+    *,
+    default_out: str | Path | None = None,
+) -> ExportSelection:
+    positionals, options = _parse_args(args)
+    topic = _option(options, "--topic", "-t") or (positionals[0] if positionals else None)
+    fmt = _option(options, "--format", "-f")
+    out = _option(options, "--out", "-o") or (str(default_out) if default_out is not None else None)
+    fps = float(_option(options, "--fps") or 30.0)
+    if topic is None or fmt is None or out is None:
+        raise ValueError("Usage: TOPIC --format FORMAT --out OUT_DIR [--fps FPS]")
+    return session.prepare_export_selection(topic, fmt, out, fps=fps)
+
+
 def _handle_export_all(session: Session, args: list[str]) -> None:
     _positionals, options = _parse_args(args)
     out = _option(options, "--out", "-o")
@@ -266,13 +379,18 @@ def _handle_export_all(session: Session, args: list[str]) -> None:
 def _handle_inspect(session: Session, args: list[str]) -> None:
     _positionals, options = _parse_args(args)
     raw_time = _option(options, "--time")
-    if raw_time is None:
-        raise ValueError("Usage: inspect --time SECONDS")
-    target_ns, results, warnings = session.inspect_time(
-        float(raw_time),
-        progress_factory=progress_task,
-    )
-    render_inspect_results(target_ns, results, warnings)
+    duration_topic = _option(options, "--dur")
+    if raw_time is None and duration_topic is None:
+        raise ValueError("Usage: inspect --time SECONDS [--dur TOPIC]")
+    if duration_topic is not None:
+        render_topic_duration(session.topic_duration(duration_topic, progress_factory=progress_task))
+    if raw_time is not None:
+        target_ns, results, warnings = session.inspect_time(
+            float(raw_time),
+            absolute_ns="--absolute-ns" in options,
+            progress_factory=progress_task,
+        )
+        render_inspect_results(target_ns, results, warnings)
 
 
 def _handle_duration(session: Session, args: list[str]) -> None:
@@ -288,8 +406,9 @@ def render_repl_help() -> None:
     console.print("  scan [BAG_PATH] [--view table|tree|nav] [--out OUT_DIR]")
     console.print("  topics [--view table|tree|nav]")
     console.print("  dur TOPIC")
-    console.print("  inspect --time SECONDS")
+    console.print("  inspect --time SECONDS [--dur TOPIC] [--absolute-ns]")
     console.print("  export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]")
+    console.print("  export-select")
     console.print("  export-all --out OUT_DIR")
     console.print("  close")
     console.print("  clear")
@@ -320,6 +439,9 @@ class Ros2UnbagCompleter(Completer):
         if previous in {"--topic", "-t"}:
             yield from _complete_values(self._topic_names(), current)
             return
+        if previous == "--dur":
+            yield from _complete_values(self._topic_names(), current)
+            return
         if previous in {"--view", "-v"}:
             yield from _complete_values(VIEW_CHOICES, current)
             return
@@ -344,7 +466,7 @@ class Ros2UnbagCompleter(Completer):
         return sorted(topic.name for topic in self.session.topics)
 
     def _export_format_values(self, command: str, tokens: list[str], current: str) -> list[str]:
-        if command != "export":
+        if command not in {"export", "export-select"}:
             return sorted(ALL_EXPORTS)
 
         args = _completed_args(tokens[1:], current)
@@ -384,9 +506,12 @@ class Ros2UnbagCompleter(Completer):
                 yield from _complete_option_values(_available_options(command, args), current)
             return
         if command == "topics":
-            yield from _complete_option_values(_available_options(command, args), current)
+            if not positionals and not options and not current:
+                yield from _complete_option_values(["-v"], current)
+            else:
+                yield from _complete_option_values(_available_options(command, args), current)
             return
-        if command == "export":
+        if command in {"export", "export-select"}:
             if "--topic" in options or "-t" in options:
                 if "--format" not in options and "-f" not in options:
                     yield from _complete_option_values(["--format"], current)
@@ -409,13 +534,27 @@ class Ros2UnbagCompleter(Completer):
                 yield from _complete_option_values(["--out"], current)
             return
         if command == "inspect":
-            if "--time" not in options:
-                yield from _complete_option_values(["--time"], current)
+            remaining = _available_options(command, args)
+            if remaining:
+                yield from _complete_option_values(remaining, current)
             return
         if command == "dur":
             if not positionals:
                 yield from _complete_values(self._topic_names(), current)
             return
+
+
+class ExportSelectCompleter(Completer):
+    def __init__(self, session: Session) -> None:
+        self.base = Ros2UnbagCompleter(session)
+
+    def get_completions(self, document: Document, complete_event: object) -> Iterable[Completion]:
+        current = _current_word(document.text_before_cursor)
+        text = document.text_before_cursor
+        if not text.strip() or (" " not in text.strip() and not text.endswith((" ", "\t"))):
+            yield from _complete_values(["export-all", "cancel"], current)
+        wrapped = Document("export " + document.text_before_cursor)
+        yield from self.base.get_completions(wrapped, complete_event)
 
 
 def _current_word(text: str) -> str:
@@ -454,6 +593,10 @@ def _completion_state(args: list[str]) -> tuple[list[str], dict[str, str | None]
         if token.startswith("--") and "=" in token:
             key, value = token.split("=", 1)
             options[key] = value
+            index += 1
+            continue
+        if token in FLAG_OPTIONS:
+            options[token] = None
             index += 1
             continue
         if token.startswith("-"):

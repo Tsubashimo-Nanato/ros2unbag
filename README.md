@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v1.3.4`
+Current release: `v1.4.0`
 
 Release preparation date: 2026-05-14
 
-This project has been publicly released and is currently maintained at version `1.3.4`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.4.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -34,7 +34,8 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - Raw serialized dumps for unsupported or undecoded topics.
 - Topic-aware export validation that blocks incompatible media exports while keeping flexible data exports available.
 - Interactive REPL shell with command history and context-aware tab completion.
-- Non-flooding Rich progress display for bag opening and progress bars for scan/indexing, exports, image sequence output, and MP4 video output.
+- Interactive selected-export mode for queueing multiple topic exports, reviewing a confirmation table, and exporting the selected set.
+- Non-flooding Rich progress display for bag opening and progress bars for scan/indexing, exports, image sequence output, and MP4 video output, with ETA when totals are available.
 - Metadata-based bag time bounds when available, avoiding a full-bag pre-index scan for single-topic exports.
 
 ## Installation
@@ -83,14 +84,15 @@ Typical session:
 
 ```text
 ros2unbag> open .\my_bag
+ros2unbag> topics -v tree
 ros2unbag> scan
-ros2unbag> topics
 ros2unbag> dur /aiformula_perception/lane_line_publisher/lane_lines/center
-ros2unbag> inspect --time 25.0
+ros2unbag> inspect --time 25.0 --dur /camera/image_raw
 ros2unbag> export /aiformula_control/joy --format csv --out .\export
 ros2unbag> export /aiformula_control/joy --format parquet --out .\export
 ros2unbag> export /aiformula_control/joy --format sqlite --out .\export
 ros2unbag> export /camera/image_raw --format mp4 --fps 30 --out .\export
+ros2unbag> export-select
 ros2unbag> export-all --out .\export
 ros2unbag> close
 ros2unbag> exit
@@ -99,20 +101,32 @@ ros2unbag> exit
 Interactive commands:
 
 - `open BAG_PATH`
-- `scan [BAG_PATH]`
-- `topics`
+- `scan [BAG_PATH] [-v table|tree|nav] [--out OUT_DIR]`
+- `topics [-v table|tree|nav]`
 - `dur TOPIC`
 - `export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]`
+- `export-select`
 - `export-all --out OUT_DIR`
-- `inspect --time SECONDS`
+- `inspect --time SECONDS [--dur TOPIC] [--absolute-ns]`
 - `close`
 - `help`
 - `clear`
 - `exit` or `quit`
 
-The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--format`, `--out`, `--time`, option values, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. For common workflows, Tab advances through the next expected parameter; for example, after completing an export topic it suggests `--format`, then format values, then `--out`. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
+The REPL uses `prompt-toolkit`. Tab completes command names, options such as `-v`, `--format`, `--out`, `--time`, `--dur`, option values, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. For common workflows, Tab advances through the next expected parameter; for example, after completing an export topic it suggests `--format`, then format values, then `--out`. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
 
-Long-running REPL commands render a single live progress display when the terminal supports it. The progress display is transient, so it does not add one printed line per message.
+Long-running REPL commands render a single live progress display when the terminal supports it. The progress display is transient, so it does not add one printed line per message. Pressing Ctrl+C interrupts the current action and returns to the shell instead of closing the shell.
+
+Selected export mode:
+
+```text
+ros2unbag> export-select
+select> /imu --format csv --out .\export
+select> /camera/image_raw --format mp4 --fps 30 --out .\export
+select> export-all
+```
+
+Before the selected exports run, `ros2unbag` displays a confirmation table and asks for `y` or `n`.
 
 ## Command-Line Usage
 
@@ -121,6 +135,14 @@ Scan a bag and print the topic table:
 ```powershell
 ros2unbag scan .\my_bag
 ```
+
+For a first pass on an unfamiliar bag, start with the topic tree:
+
+```powershell
+ros2unbag scan .\my_bag --view tree
+```
+
+The tree view is usually the fastest way to understand topic namespaces. Use `scan` with the default table view afterward when you need counts, durations, categories, and export suggestions.
 
 The default scan view is a compact table. The first column is the topic leaf name, such as `cmd_vel`, and the second column is the parent topic path, such as `/aiformula_control/game_pad`.
 
@@ -159,10 +181,22 @@ Export all compatible topics using default implemented formats:
 ros2unbag export-all .\my_bag --out .\export
 ```
 
+Interactively queue selected topic exports, review the confirmation table, then run the selected set:
+
+```powershell
+ros2unbag export-select .\my_bag --out .\export
+```
+
 Inspect nearest messages at 145 seconds after bag start:
 
 ```powershell
 ros2unbag inspect .\my_bag --time 145.0
+```
+
+Inspect nearest messages and show duration for one topic in the same command:
+
+```powershell
+ros2unbag inspect .\my_bag --time 145.0 --dur /camera/image_raw
 ```
 
 Show duration and bag-relative coverage for one topic:
@@ -190,12 +224,13 @@ ros2unbag --install-completion powershell
 ros2unbag --show-completion powershell
 ```
 
-Long-running command-line operations render a single Rich progress display instead of printing per-message status lines. Progress is shown for bag opening, full scans, timestamp indexing used by `inspect` and `dur`, single-topic exports, `export-all`, image sequence output, and MP4 video output. If the output is redirected or the terminal does not support live rendering, progress output is disabled.
+Long-running command-line operations render a single Rich progress display instead of printing per-message status lines. Progress is shown for bag opening, full scans, timestamp indexing used by `inspect` and `dur`, single-topic exports, selected exports, `export-all`, image sequence output, and MP4 video output. When a backend provides message counts, the progress display includes estimated time remaining. If the output is redirected or the terminal does not support live rendering, progress output is disabled.
 
 ## Example Workflow
 
 ```powershell
 py -m pip install -e .
+ros2unbag scan .\my_bag --view tree
 ros2unbag scan .\my_bag --out .\scan
 ros2unbag dur .\my_bag /camera/image_raw
 ros2unbag export .\my_bag --topic /camera/image_raw --format png --out .\export

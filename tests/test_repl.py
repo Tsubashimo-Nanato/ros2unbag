@@ -6,7 +6,12 @@ from pathlib import Path
 
 from prompt_toolkit.document import Document
 
-from ros2unbag.cli.repl import Ros2UnbagCompleter, split_repl_line
+from ros2unbag.cli.repl import (
+    ExportSelectCompleter,
+    Ros2UnbagCompleter,
+    _selection_from_args,
+    split_repl_line,
+)
 from ros2unbag.core.models import TopicInfo
 from ros2unbag.core.session import Session
 
@@ -117,7 +122,50 @@ class ReplTests(unittest.TestCase):
         inspect = list(completer.get_completions(Document("inspect "), object()))
 
         self.assertEqual([item.text for item in export_all], ["--out "])
-        self.assertEqual([item.text for item in inspect], ["--time "])
+        self.assertIn("--time ", [item.text for item in inspect])
+        self.assertIn("--dur ", [item.text for item in inspect])
+
+    def test_topics_completion_prefers_view_short_option(self) -> None:
+        completer = Ros2UnbagCompleter(Session())
+
+        completions = list(completer.get_completions(Document("topics "), object()))
+
+        self.assertEqual([item.text for item in completions], ["-v "])
+
+    def test_inspect_duration_option_completes_topics(self) -> None:
+        session = Session()
+        session.topics = [TopicInfo(name="/imu", msgtype="sensor_msgs/msg/Imu")]
+        completer = Ros2UnbagCompleter(session)
+
+        completions = list(
+            completer.get_completions(Document("inspect --dur /i"), object())
+        )
+
+        self.assertEqual([item.text for item in completions], ["/imu"])
+
+    def test_export_select_completer_reuses_export_arguments(self) -> None:
+        session = Session()
+        session.topics = [TopicInfo(name="/imu", msgtype="sensor_msgs/msg/Imu")]
+        completer = ExportSelectCompleter(session)
+
+        topic_completions = list(completer.get_completions(Document("/i"), object()))
+        option_completions = list(completer.get_completions(Document("/imu "), object()))
+
+        self.assertEqual([item.text for item in topic_completions], ["/imu"])
+        self.assertEqual([item.text for item in option_completions], ["--format "])
+
+    def test_selection_parser_accepts_export_style_arguments(self) -> None:
+        session = Session()
+        session.reader = object()  # type: ignore[assignment]
+        session.topics = [TopicInfo(name="/imu", msgtype="sensor_msgs/msg/Imu")]
+
+        selection = _selection_from_args(
+            session,
+            ["/imu", "--format", "csv", "--out", ".\\export"],
+        )
+
+        self.assertEqual(selection.topic, "/imu")
+        self.assertEqual(selection.format, "csv")
 
     def test_scan_path_completion_still_works_after_opening_bag(self) -> None:
         session = Session()

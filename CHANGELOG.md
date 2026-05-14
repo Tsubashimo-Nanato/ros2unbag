@@ -2,6 +2,22 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.4.0] - 2026-05-14
+
+Selected export and shell UX release.
+
+### Added
+
+- Added interactive `export-select` mode for queueing multiple topic exports, reviewing a confirmation table, and exporting the selected set.
+- Added `inspect --dur TOPIC` so nearest-message inspection and topic duration checks can be run from one inspect command.
+
+### Changed
+
+- REPL Ctrl+C handling now interrupts the current action without closing the shell.
+- REPL completion now covers `export-select`, `inspect --dur`, and the `topics -v` shortcut more directly.
+- Topic tree and opened-bag status rendering now use clearer color-coded paths.
+- Progress bars now include ETA when the backend provides a message count and print an interruption summary when cancelled.
+
 ## [1.3.4] - 2026-05-14
 
 Export compatibility release.
