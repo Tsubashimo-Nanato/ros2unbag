@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v1.4.1`
+Current release: `v1.4.2`
 
 Release preparation date: 2026-05-14
 
-This project has been publicly released and is currently maintained at version `1.4.1`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.4.2`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -35,8 +35,9 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - Topic-aware export validation that blocks incompatible media exports while keeping flexible data exports available.
 - Interactive REPL shell with command history and context-aware tab completion.
 - Interactive selected-export mode for queueing multiple topic exports, reviewing a confirmation table, and exporting the selected set.
-- Non-flooding Rich progress display for bag opening and progress bars for scan/indexing, exports, image sequence output, and MP4 video output, with ETA when totals are available.
+- Non-flooding Rich progress display for bag opening and block-style progress bars for scan/indexing, exports, image sequence output, and MP4 video output, with ETA when totals are available.
 - Metadata-based bag time bounds when available, avoiding a full-bag pre-index scan for single-topic exports.
+- Streaming nearest-message inspection when bag time bounds are available, avoiding a full in-memory timestamp index for common `inspect --time` workflows.
 
 ## Installation
 
@@ -227,7 +228,7 @@ ros2unbag --install-completion powershell
 ros2unbag --show-completion powershell
 ```
 
-Long-running command-line operations render a single Rich progress display instead of printing per-message status lines. Progress is shown for bag opening, full scans, timestamp indexing used by `inspect` and `dur`, single-topic exports, selected exports, `export-all`, image sequence output, and MP4 video output. When a backend provides message counts, the progress display includes estimated time remaining. If the output is redirected or the terminal does not support live rendering, progress output is disabled.
+Long-running command-line operations render a single Rich progress display instead of printing per-message status lines. Progress is shown for bag opening, full scans, timestamp indexing used by `inspect` and `dur`, single-topic exports, selected exports, `export-all`, image sequence output, and MP4 video output. When a backend provides message counts, the progress display uses a block-style bar and includes estimated time remaining. If the output is redirected or the terminal does not support live rendering, progress output is disabled.
 
 ## Example Workflow
 

@@ -8,7 +8,7 @@ from .bag_reader import BaseBagReader, open_bag_reader, time_bounds_from_topics
 from .manifest import build_manifest, write_manifest, write_topics_csv
 from .models import ExportResult, ExportSelection, Manifest, TopicDuration, TopicInfo
 from .progress import ProgressCallback
-from .sync import InspectResult, inspect_time as inspect_time_core
+from .sync import InspectResult, inspect_time_streaming
 from .topic_indexer import build_timestamp_index
 from .type_classifier import classify_topic, suggested_exports_for_category
 from ..exporters.csv_exporter import export_topic_csv
@@ -92,14 +92,14 @@ class Session:
     ) -> tuple[int, list[InspectResult], list[str]]:
         reader = self._require_reader()
         if progress_factory is None:
-            target_ns, results = inspect_time_core(
+            target_ns, results = inspect_time_streaming(
                 reader,
                 absolute_timestamp_ns=int(seconds) if absolute_ns else None,
                 relative_time_sec=None if absolute_ns else seconds,
             )
         else:
-            with progress_factory("Indexing timestamps", _total_message_count(self.topics)) as advance:
-                target_ns, results = inspect_time_core(
+            with progress_factory("Inspecting nearest messages", _total_message_count(self.topics)) as advance:
+                target_ns, results = inspect_time_streaming(
                     reader,
                     absolute_timestamp_ns=int(seconds) if absolute_ns else None,
                     relative_time_sec=None if absolute_ns else seconds,

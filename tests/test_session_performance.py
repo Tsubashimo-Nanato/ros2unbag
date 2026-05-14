@@ -15,6 +15,7 @@ class MetadataBoundedReader:
 
     def __init__(self) -> None:
         self.full_scan_requested = False
+        self.topic_filtered_scan_requested = False
         self.records = [
             MessageRecord(
                 topic="/numbers",
@@ -52,8 +53,9 @@ class MetadataBoundedReader:
     def iter_messages(self, topics: list[str] | None = None) -> object:
         if topics is None:
             self.full_scan_requested = True
-            raise AssertionError("single-topic export should not scan the whole bag")
-        topic_filter = set(topics)
+        else:
+            self.topic_filtered_scan_requested = True
+        topic_filter = {record.topic for record in self.records} if topics is None else set(topics)
         for record in self.records:
             if record.topic in topic_filter:
                 yield record
@@ -94,6 +96,62 @@ class SessionPerformanceTests(unittest.TestCase):
         self.assertFalse(reader.full_scan_requested)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].message_count, 2)
+
+
+class InspectReader:
+    path = "fake"
+    warnings: list[str] = []
+
+    def __init__(self) -> None:
+        self.records = [
+            MessageRecord("/a", 100, "std_msgs/msg/Int32", raw=b"a1"),
+            MessageRecord("/b", 110, "std_msgs/msg/Int32", raw=b"b1"),
+            MessageRecord("/a", 200, "std_msgs/msg/Int32", raw=b"a2"),
+            MessageRecord("/b", 220, "std_msgs/msg/Int32", raw=b"b2"),
+            MessageRecord("/a", 300, "std_msgs/msg/Int32", raw=b"a3"),
+        ]
+        self.iterated_count = 0
+
+    def get_topics(self) -> list[TopicInfo]:
+        return [
+            TopicInfo(name="/a", msgtype="std_msgs/msg/Int32", message_count=3),
+            TopicInfo(name="/b", msgtype="std_msgs/msg/Int32", message_count=2),
+        ]
+
+    def get_time_bounds(self) -> tuple[int | None, int | None]:
+        return 100, 300
+
+    def get_message_count(self, topic: str) -> int:
+        return 3 if topic == "/a" else 2
+
+    def iter_messages(self, topics: list[str] | None = None) -> object:
+        if topics is not None:
+            raise AssertionError("streaming inspect should not build a timestamp index")
+        topic_filter = set(topics or [])
+        for record in self.records:
+            if not topic_filter or record.topic in topic_filter:
+                self.iterated_count += 1
+                yield record
+
+    def close(self) -> None:
+        return None
+
+
+class InspectPerformanceTests(unittest.TestCase):
+    def test_inspect_uses_streaming_nearest_query_when_bounds_exist(self) -> None:
+        reader = InspectReader()
+        session = Session()
+        session.reader = reader  # type: ignore[assignment]
+        session.bag_path = Path("fake")
+        session.topics = reader.get_topics()
+
+        target_ns, results, _warnings = session.inspect_time(0.00000005)
+        by_topic = {result.topic: result for result in results}
+
+        self.assertEqual(target_ns, 150)
+        self.assertEqual(by_topic["/a"].nearest_timestamp_ns, 100)
+        self.assertEqual(by_topic["/b"].nearest_timestamp_ns, 110)
+        self.assertEqual(reader.iterated_count, 4)
 
 
 if __name__ == "__main__":

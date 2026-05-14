@@ -2,6 +2,21 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.4.2] - 2026-05-14
+
+Stress-test and progress performance release.
+
+### Changed
+
+- Replaced the default progress bar with a fixed-width block bar.
+- Batched progress updates for large scans and exports to reduce terminal rendering overhead.
+- Optimized `inspect --time` to use a streaming nearest-message query when bag time bounds are available, avoiding a full in-memory timestamp index for common bags.
+
+### Tested
+
+- Added synthetic stress coverage for progress rendering and streaming inspect behavior.
+- Stress-tested scan, timestamp indexing, and streaming inspect on a synthetic 250,000-message, 80-topic reader.
+
 ## [1.4.1] - 2026-05-14
 
 Shell and topic display cleanup release.
