@@ -138,7 +138,10 @@ def export(
     session = Session(backend=backend)
     try:
         _open_session_with_progress(session, bag_path)
-        result = session.export_topic(topic, fmt, out, fps=fps, progress_factory=progress_task)
+        try:
+            result = session.export_topic(topic, fmt, out, fps=fps, progress_factory=progress_task)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
         render_export_result(result)
     finally:
         session.close()

@@ -2,6 +2,16 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.3.4] - 2026-05-14
+
+Export compatibility release.
+
+### Changed
+
+- Topic exports now reject incompatible media formats early, such as exporting point clouds or custom structs as `mp4`, `png`, or `jpg`.
+- Flexible data exports remain available across topic types, including image topics exported as `csv`, `jsonl`, `parquet`, `sqlite`, or `raw`.
+- Topic export suggestions now show tabular/raw flexibility for image topics and JSONL flexibility for point clouds.
+
 ## [1.3.2] - 2026-05-14
 
 Interactive shell completion release.

@@ -69,9 +69,9 @@ def suggested_exports_for_category(category: str) -> list[str]:
     if category in {"matrix_like", "custom_struct"}:
         return ["jsonl", "csv", "parquet", "sqlite"]
     if category in {"image", "compressed_image", "mask_candidate"}:
-        return ["png", "jpg", "mp4", "raw"]
+        return ["png", "jpg", "mp4", "csv", "jsonl", "raw"]
     if category == "point_cloud":
-        return ["csv", "parquet", "sqlite", "raw"]
+        return ["csv", "parquet", "sqlite", "jsonl", "raw"]
     return ["raw"]
 
 

@@ -24,6 +24,10 @@ IMPLEMENTED_EXPORTS = {"csv", "jpg", "jsonl", "mp4", "parquet", "png", "raw", "s
 FUTURE_EXPORTS: dict[str, str] = {}
 ALL_EXPORTS = IMPLEMENTED_EXPORTS | set(FUTURE_EXPORTS)
 ProgressFactory = Callable[[str, int | None], AbstractContextManager[ProgressCallback]]
+DATA_EXPORTS = ["csv", "jsonl", "parquet", "raw", "sqlite"]
+IMAGE_EXPORTS = ["jpg", "mp4", "png"]
+IMAGE_MSGTYPES = {"sensor_msgs/msg/Image", "sensor_msgs/msg/CompressedImage"}
+IMAGE_CATEGORIES = {"image", "compressed_image", "mask_candidate"}
 
 
 class Session:
@@ -117,9 +121,11 @@ class Session:
         fmt = validate_export_format(fmt)
         if fmt in FUTURE_EXPORTS:
             raise ValueError(FUTURE_EXPORTS[fmt])
-        topic_names = {item.name for item in self.list_topics()}
-        if topic not in topic_names:
+        topics_by_name = {item.name: item for item in self.list_topics()}
+        topic_info = topics_by_name.get(topic)
+        if topic_info is None:
             raise ValueError(f"Topic not found: {topic}")
+        validate_topic_export_format(topic_info, fmt)
         bag_start_ns, bag_end_ns = self._bag_time_bounds(progress_factory=progress_factory)
         result = self._run_export_with_progress(
             reader,
@@ -317,6 +323,27 @@ def validate_export_format(fmt: str) -> str:
         allowed = ", ".join(sorted(ALL_EXPORTS))
         raise ValueError(f"Unsupported format {fmt!r}. Choose one of: {allowed}")
     return normalized
+
+
+def compatible_export_formats(topic: TopicInfo) -> list[str]:
+    formats = list(DATA_EXPORTS)
+    if _is_image_topic(topic):
+        formats.extend(IMAGE_EXPORTS)
+    return formats
+
+
+def validate_topic_export_format(topic: TopicInfo, fmt: str) -> None:
+    if fmt in compatible_export_formats(topic):
+        return
+    allowed = ", ".join(compatible_export_formats(topic))
+    raise ValueError(
+        f"Format {fmt!r} is not compatible with topic {topic.name} "
+        f"({topic.msgtype}, {topic.category}). Allowed formats: {allowed}"
+    )
+
+
+def _is_image_topic(topic: TopicInfo) -> bool:
+    return topic.msgtype in IMAGE_MSGTYPES or topic.category in IMAGE_CATEGORIES
 
 
 def run_export(

@@ -22,7 +22,7 @@ from ros2unbag.cli.render import (
     render_warnings,
 )
 from ros2unbag.core.manifest import write_manifest, write_topics_csv
-from ros2unbag.core.session import ALL_EXPORTS, Session
+from ros2unbag.core.session import ALL_EXPORTS, Session, compatible_export_formats
 
 COMMANDS = [
     "open",
@@ -315,7 +315,7 @@ class Ros2UnbagCompleter(Completer):
 
         previous = tokens[-2] if len(tokens) >= 2 else ""
         if previous in {"--format", "-f"}:
-            yield from _complete_values(sorted(ALL_EXPORTS), current)
+            yield from _complete_values(self._export_format_values(command, tokens, current), current)
             return
         if previous in {"--topic", "-t"}:
             yield from _complete_values(self._topic_names(), current)
@@ -342,6 +342,23 @@ class Ros2UnbagCompleter(Completer):
 
     def _topic_names(self) -> list[str]:
         return sorted(topic.name for topic in self.session.topics)
+
+    def _export_format_values(self, command: str, tokens: list[str], current: str) -> list[str]:
+        if command != "export":
+            return sorted(ALL_EXPORTS)
+
+        args = _completed_args(tokens[1:], current)
+        positionals, options, _expecting_value = _completion_state(args)
+        selected_topic = options.get("--topic") or options.get("-t")
+        if selected_topic is None and positionals:
+            selected_topic = positionals[0]
+        topic_info = next(
+            (topic for topic in self.session.topics if topic.name == selected_topic),
+            None,
+        )
+        if topic_info is None:
+            return sorted(ALL_EXPORTS)
+        return compatible_export_formats(topic_info)
 
     def _complete_next_argument(
         self,

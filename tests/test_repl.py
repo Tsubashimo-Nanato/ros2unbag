@@ -25,6 +25,26 @@ class ReplTests(unittest.TestCase):
         self.assertIn("csv", values)
         self.assertIn("raw", values)
 
+    def test_format_completion_filters_media_for_non_image_topic(self) -> None:
+        session = Session()
+        session.topics = [
+            TopicInfo(
+                name="/points",
+                msgtype="sensor_msgs/msg/PointCloud2",
+                category="point_cloud",
+            )
+        ]
+        completer = Ros2UnbagCompleter(session)
+
+        completions = list(
+            completer.get_completions(Document("export /points --format "), object())
+        )
+        values = {item.text for item in completions}
+
+        self.assertIn("csv", values)
+        self.assertIn("raw", values)
+        self.assertNotIn("mp4", values)
+
     def test_completes_open_topics(self) -> None:
         session = Session()
         session.topics = [

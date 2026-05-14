@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v1.3.2`
+Current release: `v1.3.4`
 
-Release preparation date: 2026-05-12
+Release preparation date: 2026-05-14
 
-This project has been publicly released and is currently maintained at version `1.3.2`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.3.4`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -32,6 +32,7 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - SQLite session export with topic metadata, message rows, export records, and per-topic flattened tables.
 - Timestamp sidecar CSV files for image, video, and raw exports.
 - Raw serialized dumps for unsupported or undecoded topics.
+- Topic-aware export validation that blocks incompatible media exports while keeping flexible data exports available.
 - Interactive REPL shell with command history and context-aware tab completion.
 - Non-flooding Rich progress display for bag opening and progress bars for scan/indexing, exports, image sequence output, and MP4 video output.
 - Metadata-based bag time bounds when available, avoiding a full-bag pre-index scan for single-topic exports.
@@ -241,12 +242,15 @@ Implemented:
 
 - `csv` for scalar and simple decoded structs
 - `csv` point-row export for decoded `sensor_msgs/msg/PointCloud2`
+- `csv`, `parquet`, `sqlite`, `jsonl`, and `raw` remain available for image topics when tabular/raw analysis is useful
 - `parquet` for flattened tabular topic data
 - `sqlite` for a session database with metadata, message rows, and per-topic flattened tables
 - `jsonl` for arbitrary decoded messages
 - `png` and `jpg` image sequences for decoded `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage`
 - `mp4` video for decoded image topics, with a timestamp sidecar CSV
 - `raw` for serialized CDR/message bytes with a timestamp sidecar CSV
+
+Media formats `png`, `jpg`, and `mp4` are restricted to decoded ROS image topics such as `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage`. Data-oriented formats remain intentionally flexible across topic types.
 
 Planned:
 
