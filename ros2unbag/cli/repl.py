@@ -24,6 +24,7 @@ from ros2unbag.cli.render import (
     render_topic_duration,
     render_warnings,
 )
+from ros2unbag.cli.upgrade import UPGRADE_SOURCES, build_upgrade_plan, run_upgrade
 from ros2unbag.core.manifest import write_manifest, write_topics_csv
 from ros2unbag.core.models import ExportSelection
 from ros2unbag.core.session import ALL_EXPORTS, Session, compatible_export_formats
@@ -38,6 +39,7 @@ COMMANDS = [
     "export-all",
     "inspect",
     "dur",
+    "upgrade",
     "help",
     "clear",
     "exit",
@@ -53,10 +55,12 @@ OPTIONS_BY_COMMAND = {
     "export-all": ["--out", "-o"],
     "inspect": ["--time", "--dur", "--absolute-ns"],
     "dur": [],
+    "upgrade": ["--source", "--ref", "--yes", "-y", "--print-only"],
 }
 
 VIEW_CHOICES = ["table", "tree", "nav"]
 BACKEND_CHOICES = ["auto", "rosbags", "sqlite"]
+SOURCE_CHOICES = list(UPGRADE_SOURCES)
 VALUE_OPTIONS = {
     "--backend",
     "--format",
@@ -70,9 +74,11 @@ VALUE_OPTIONS = {
     "-t",
     "--view",
     "-v",
+    "--source",
+    "--ref",
 }
 FLAG_OPTIONS = {"--absolute-ns"}
-FLAG_OPTIONS.update({"--all", "-all", "--select", "-s"})
+FLAG_OPTIONS.update({"--all", "-all", "--select", "-s", "--yes", "-y", "--print-only"})
 
 
 def run_repl() -> None:
@@ -159,6 +165,9 @@ def dispatch_repl_line(session: Session, line: str) -> bool:
             return False
         if command == "dur":
             _handle_duration(session, args)
+            return False
+        if command == "upgrade":
+            _handle_upgrade(args)
             return False
         console.print(f"[red]Unknown command:[/red] {command}")
         console.print("Type [bold]help[/bold] for available commands.")
@@ -412,6 +421,26 @@ def _handle_duration(session: Session, args: list[str]) -> None:
     render_topic_duration(session.topic_duration(positionals[0], progress_factory=progress_task))
 
 
+def _handle_upgrade(args: list[str]) -> None:
+    _positionals, options = _parse_args(args)
+    source = _option(options, "--source") or "github"
+    ref = _option(options, "--ref")
+    plan = build_upgrade_plan(source=source, ref=ref)
+
+    console.print("Upgrade command:")
+    console.print(f"[bold]{plan.display_command}[/bold]", soft_wrap=False)
+    if _flag(options, "--print-only"):
+        return
+    if not _flag(options, "--yes", "-y"):
+        if not Confirm.ask("Run upgrade now?", default=False, console=console):
+            console.print("Upgrade cancelled.")
+            return
+
+    console.print(f"Upgrading ros2unbag from [bold]{plan.source}[/bold]...")
+    run_upgrade(plan)
+    console.print("[green]Upgrade finished.[/green] Restart ros2unbag to use the updated code.")
+
+
 def render_repl_help() -> None:
     console.print("Commands:")
     console.print("  open BAG_PATH [--backend auto|rosbags|sqlite]")
@@ -424,6 +453,7 @@ def render_repl_help() -> None:
     console.print("  export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]")
     console.print("  export-select")
     console.print("  export-all --out OUT_DIR")
+    console.print("  upgrade [--source github|pypi] [--ref REF] [--yes]")
     console.print("  close")
     console.print("  clear")
     console.print("  exit | quit")
@@ -460,6 +490,9 @@ class Ros2UnbagCompleter(Completer):
             yield from _complete_values(VIEW_CHOICES, current)
             return
         if previous == "--fps":
+            return
+        if previous == "--source":
+            yield from _complete_values(SOURCE_CHOICES, current)
             return
         if previous in {"--out", "-o", "--backend"}:
             if previous == "--backend":
@@ -557,6 +590,9 @@ class Ros2UnbagCompleter(Completer):
         if command == "dur":
             if not positionals:
                 yield from _complete_values(self._topic_names(), current)
+            return
+        if command == "upgrade":
+            yield from _complete_option_values(_available_options(command, args), current)
             return
 
 

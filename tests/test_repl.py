@@ -141,6 +141,17 @@ class ReplTests(unittest.TestCase):
 
         self.assertEqual([item.text for item in completions], ["--all "])
 
+    def test_upgrade_completion_offers_source_values(self) -> None:
+        completer = Ros2UnbagCompleter(Session())
+
+        option_completions = list(completer.get_completions(Document("upgrade "), object()))
+        source_completions = list(
+            completer.get_completions(Document("upgrade --source "), object())
+        )
+
+        self.assertIn("--source ", [item.text for item in option_completions])
+        self.assertEqual([item.text for item in source_completions], ["github", "pypi"])
+
     def test_inspect_duration_option_completes_topics(self) -> None:
         session = Session()
         session.topics = [TopicInfo(name="/imu", msgtype="sensor_msgs/msg/Imu")]

@@ -18,6 +18,7 @@ from ros2unbag.cli.render import (
     render_warnings,
 )
 from ros2unbag.cli.progress import progress_task
+from ros2unbag.cli.upgrade import UPGRADE_SOURCES, build_upgrade_plan, run_upgrade
 from ros2unbag.core.manifest import write_manifest, write_topics_csv
 from ros2unbag.core.session import (
     ALL_EXPORTS,
@@ -328,6 +329,49 @@ def uninstall_command(
     exec_command = [sys.executable, "-m", "pip", "uninstall", "-y", *UNINSTALL_PACKAGES]
     console.print("Uninstalling ros2unbag, previous package names, and dependencies...")
     os.execv(sys.executable, exec_command)
+
+
+@app.command("upgrade")
+def upgrade_command(
+    source: Annotated[
+        str,
+        typer.Option(
+            "--source",
+            help="Upgrade source: github or pypi. GitHub is the default release source.",
+        ),
+    ] = "github",
+    ref: Annotated[
+        str | None,
+        typer.Option(
+            "--ref",
+            help="GitHub branch/tag/commit, or exact PyPI version when --source pypi is used.",
+        ),
+    ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Run the upgrade command without printing only."),
+    ] = False,
+    print_only: Annotated[
+        bool,
+        typer.Option("--print-only", help="Only print the pip upgrade command."),
+    ] = False,
+) -> None:
+    """Print or run the self-upgrade command."""
+    try:
+        plan = build_upgrade_plan(source=source, ref=ref)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if print_only or not yes:
+        console.print("Upgrade command:")
+        console.print(f"[bold]{plan.display_command}[/bold]", soft_wrap=False)
+        console.print("Run [bold]ros2unbag upgrade --yes[/bold] to execute it.")
+        console.print(f"Sources: {', '.join(UPGRADE_SOURCES)}")
+        return
+
+    console.print(f"Upgrading ros2unbag from [bold]{plan.source}[/bold]...")
+    run_upgrade(plan)
+    console.print("[green]Upgrade finished.[/green] Restart ros2unbag to use the updated code.")
 
 
 if __name__ == "__main__":

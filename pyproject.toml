@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ros2unbag"
-version = "1.4.2"
+version = "1.4.3"
 description = "Offline ROS 1/2 bag inspection and export tooling."
 readme = "README.md"
 requires-python = ">=3.10"

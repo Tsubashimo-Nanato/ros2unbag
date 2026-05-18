@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v1.4.2`
+Current release: `v1.4.3`
 
-Release preparation date: 2026-05-14
+Release preparation date: 2026-05-18
 
-This project has been publicly released and is currently maintained at version `1.4.2`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.4.3`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -35,7 +35,8 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - Topic-aware export validation that blocks incompatible media exports while keeping flexible data exports available.
 - Interactive REPL shell with command history and context-aware tab completion.
 - Interactive selected-export mode for queueing multiple topic exports, reviewing a confirmation table, and exporting the selected set.
-- Non-flooding Rich progress display for bag opening and block-style progress bars for scan/indexing, exports, image sequence output, and MP4 video output, with ETA when totals are available.
+- Shell upgrade command for updating an installed copy from GitHub or PyPI.
+- Non-flooding progress display for bag opening and block-style progress bars for scan/indexing, exports, image sequence output, and MP4 video output, with ETA when totals are available.
 - Metadata-based bag time bounds when available, avoiding a full-bag pre-index scan for single-topic exports.
 - Streaming nearest-message inspection when bag time bounds are available, avoiding a full in-memory timestamp index for common `inspect --time` workflows.
 
@@ -48,6 +49,26 @@ py -m pip install -e .
 ```
 
 The distribution name, installed command, and Python import package are all `ros2unbag`.
+
+Upgrade an installed copy from the GitHub repository:
+
+```powershell
+ros2unbag upgrade --yes
+```
+
+Preview the upgrade command:
+
+```powershell
+ros2unbag upgrade --print-only
+```
+
+Upgrade from a specific GitHub tag, branch, or commit:
+
+```powershell
+ros2unbag upgrade --ref v1.4.3 --yes
+```
+
+The running shell process cannot reload upgraded Python code in place. Restart `ros2unbag` after a successful upgrade.
 
 Uninstall:
 
@@ -96,6 +117,7 @@ ros2unbag> export /aiformula_control/joy --format sqlite --out .\export
 ros2unbag> export /camera/image_raw --format mp4 --fps 30 --out .\export
 ros2unbag> export-select
 ros2unbag> export-all --out .\export
+ros2unbag> upgrade
 ros2unbag> close
 ros2unbag> exit
 ```
@@ -112,14 +134,15 @@ Interactive commands:
 - `export-select`
 - `export-all --out OUT_DIR`
 - `inspect --time SECONDS [--dur TOPIC] [--absolute-ns]`
+- `upgrade [--source github|pypi] [--ref REF] [--yes]`
 - `close`
 - `help`
 - `clear`
 - `exit` or `quit`
 
-The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--all`, `-all`, `-s`, `--format`, `--out`, `--time`, `--dur`, option values, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. For common workflows, Tab advances through the next expected parameter; for example, after completing an export topic it suggests `--format`, then format values, then `--out`. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
+The REPL uses `prompt-toolkit`. Tab completes command names, options such as `--all`, `-all`, `-s`, `--format`, `--out`, `--time`, `--dur`, `--source`, option values, and filesystem paths. After `open BAG_PATH`, Tab also completes topic names from the opened bag. For common workflows, Tab advances through the next expected parameter; for example, after completing an export topic it suggests `--format`, then format values, then `--out`. Press Tab twice to show possible completions. History is stored in `.ros2unbag_history` in the current working directory and is ignored by Git.
 
-Long-running REPL commands render a single live progress display when the terminal supports it. The progress display is transient, so it does not add one printed line per message. Pressing Ctrl+C interrupts the current action and returns to the shell instead of closing the shell.
+Long-running REPL commands render a single live progress display when the terminal supports it. On Windows consoles, including `cmd.exe`, `ros2unbag` uses a bounded single-line fallback progress display to avoid repeated-line output from live terminal rendering. Pressing Ctrl+C interrupts the current action and returns to the shell instead of closing the shell.
 
 Selected export mode:
 
@@ -221,6 +244,14 @@ List recognized export formats:
 ros2unbag formats
 ```
 
+Upgrade the installed package:
+
+```powershell
+ros2unbag upgrade --yes
+ros2unbag upgrade --ref v1.4.3 --yes
+ros2unbag upgrade --source pypi --yes
+```
+
 Typer shell completion is available:
 
 ```powershell
@@ -228,7 +259,7 @@ ros2unbag --install-completion powershell
 ros2unbag --show-completion powershell
 ```
 
-Long-running command-line operations render a single Rich progress display instead of printing per-message status lines. Progress is shown for bag opening, full scans, timestamp indexing used by `inspect` and `dur`, single-topic exports, selected exports, `export-all`, image sequence output, and MP4 video output. When a backend provides message counts, the progress display uses a block-style bar and includes estimated time remaining. If the output is redirected or the terminal does not support live rendering, progress output is disabled.
+Long-running command-line operations render a single progress display instead of printing per-message status lines. Progress is shown for bag opening, full scans, timestamp indexing used by `inspect` and `dur`, single-topic exports, selected exports, `export-all`, image sequence output, and MP4 video output. When a backend provides message counts, the progress display uses a block-style bar and includes estimated time remaining. On Windows consoles, including `cmd.exe`, `ros2unbag` uses a bounded single-line fallback to avoid Rich live-rendering output floods. If the output is redirected or the terminal does not support progress rendering, progress output is disabled. Set `ROS2UNBAG_PLAIN_PROGRESS=1` to force the fallback progress renderer.
 
 ## Example Workflow
 

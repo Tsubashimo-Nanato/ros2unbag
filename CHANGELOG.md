@@ -2,6 +2,19 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.4.3] - 2026-05-18
+
+Shell upgrade and Windows progress fallback release.
+
+### Added
+
+- Added `ros2unbag upgrade` and interactive `upgrade` shell support for upgrading the installed package from GitHub or PyPI.
+- Added `--ref` support for upgrading from a specific GitHub branch, tag, commit, or exact PyPI version.
+
+### Fixed
+
+- Switched Windows consoles to a bounded single-line progress fallback to avoid repeated-line output flooding in `cmd.exe`.
+
 ## [1.4.2] - 2026-05-14
 
 Stress-test and progress performance release.
