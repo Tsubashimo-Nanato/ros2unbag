@@ -2,11 +2,22 @@
 
 All notable changes for this project will be documented in this file.
 
-## [Unreleased]
+## [1.5.1] - 2026-05-24
 
-No unreleased changes currently documented.
+### Added
 
-## [2.0.0] - 2026-05-24
+- Added a GUI dark/light appearance switch in `File > Version...`.
+- Added a modal GUI loading progress dialog while opening bags.
+- Added short eased dock-resize animation for panel autosizing.
+
+### Changed
+
+- GUI theme colors now drive the main view, tile, topic list, output, and control backgrounds consistently.
+- GUI topic-list autosizing now uses topic data and bounded dock targets instead of relying on stale visible tree column hints.
+- GUI dock resize animation now tracks horizontal and vertical animations independently, avoiding cancelled autosize updates.
+- The unused central spacer is collapsed so dock panels do not leave a blank middle area between the topic list and main view.
+
+## [1.5] - 2026-05-24
 
 ### Added
 

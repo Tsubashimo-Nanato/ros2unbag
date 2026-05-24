@@ -62,6 +62,10 @@ class TimelineViewer:
         self._playback_rate = 1.0
         self._update_settings = self.QtCore.QSettings("TsubashimoNanato", "ros2unbag")
         self._latest_update_info: UpdateInfo | None = None
+        stored_theme = str(self._update_settings.value("ui/theme", "") or "")
+        self._theme = _normalize_theme(stored_theme) if stored_theme else _system_theme(self.QtWidgets)
+        self._dock_resize_generations = {"horizontal": 0, "vertical": 0}
+        self._autosize_pending = False
 
         self.window = _create_drop_window(self.QtWidgets, self.QtCore, self.open_bag)
         self.window.setWindowTitle("ros2unbag Timeline Viewer")
@@ -73,11 +77,24 @@ class TimelineViewer:
 
     def show(self) -> None:
         self.window.show()
+        self._queue_autosize_docks()
 
     def open_bag(self, bag_path: str | Path) -> None:
         path = Path(bag_path)
         self._log(f"Opening {path}")
         self._start_progress(f"Opening {path.name}", None)
+        load_dialog = self.QtWidgets.QProgressDialog(
+            f"Opening {path}...",
+            None,
+            0,
+            0,
+            self.window,
+        )
+        load_dialog.setWindowTitle("Loading bag")
+        load_dialog.setWindowModality(self.QtCore.Qt.WindowModality.WindowModal)
+        load_dialog.setMinimumDuration(0)
+        load_dialog.show()
+        self.QtWidgets.QApplication.processEvents()
         try:
             topics = self.session.open_bag(path)
             self.preview = PreviewService(self.session)
@@ -92,11 +109,12 @@ class TimelineViewer:
             self._populate_topics()
             self._load_metadata_time_bounds()
             self._autosize_topic_columns()
-            self._autosize_docks()
+            self._queue_autosize_docks()
             self._log(f"Opened {path} ({len(topics)} topics)")
         except Exception as exc:
             self._show_warning(f"Failed to open bag: {exc}")
         finally:
+            load_dialog.close()
             self._finish_progress()
 
     def assign_topic_to_pane(self, pane: Any, topic: str) -> None:
@@ -186,36 +204,16 @@ class TimelineViewer:
             | QtWidgets.QMainWindow.DockOption.AllowTabbedDocks
             | QtWidgets.QMainWindow.DockOption.AnimatedDocks
         )
-        self.window.setStyleSheet(
-            """
-            QDockWidget::title {
-                padding: 4px 6px;
-                font-weight: 600;
-            }
-            QGroupBox {
-                font-weight: 600;
-                margin-top: 8px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 8px;
-                padding: 0 4px;
-            }
-            QFrame#topicViewPane {
-                border: 1px solid #9a9a9a;
-                border-radius: 4px;
-                background: #f8f8f8;
-            }
-            QToolButton {
-                padding: 2px 6px;
-            }
-            """
-        )
 
-        placeholder = QtWidgets.QLabel("Use File > Import bag... or drop a bag folder here.")
-        placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        placeholder.setStyleSheet("color: #666; font-size: 14px;")
-        self.window.setCentralWidget(placeholder)
+        self.central_spacer = QtWidgets.QWidget()
+        self.central_spacer.setObjectName("centralSpacer")
+        self.central_spacer.setMinimumSize(0, 0)
+        self.central_spacer.setMaximumWidth(0)
+        self.central_spacer.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Ignored,
+        )
+        self.window.setCentralWidget(self.central_spacer)
 
         self.topic_tree = self.TopicTreeWidget()
         self.topic_tree.setHeaderLabels(["Topic", "Category", "Count"])
@@ -227,6 +225,7 @@ class TimelineViewer:
         self.topic_tree.setMinimumWidth(260)
 
         self.view_grid_widget = QtWidgets.QWidget()
+        self.view_grid_widget.setObjectName("viewGrid")
         self.view_grid = QtWidgets.QGridLayout(self.view_grid_widget)
         self.view_grid.setContentsMargins(6, 6, 6, 6)
         self.view_grid.setSpacing(6)
@@ -236,6 +235,7 @@ class TimelineViewer:
         self._layout_panes()
 
         settings_panel = QtWidgets.QWidget()
+        settings_panel.setObjectName("propertiesPanel")
         settings_layout = QtWidgets.QFormLayout(settings_panel)
         settings_layout.setContentsMargins(10, 10, 10, 10)
         settings_layout.setSpacing(8)
@@ -266,11 +266,14 @@ class TimelineViewer:
         settings_layout.addRow(self.save_settings_button)
 
         settings_scroll = QtWidgets.QScrollArea()
+        settings_scroll.setObjectName("propertiesScroll")
+        settings_scroll.viewport().setObjectName("propertiesViewport")
         settings_scroll.setWidgetResizable(True)
         settings_scroll.setWidget(settings_panel)
 
-        main_panel = QtWidgets.QWidget()
-        main_layout = QtWidgets.QVBoxLayout(main_panel)
+        self.main_panel = QtWidgets.QWidget()
+        self.main_panel.setObjectName("mainPanel")
+        main_layout = QtWidgets.QVBoxLayout(self.main_panel)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(6)
         main_layout.addWidget(self.view_grid_widget, 1)
@@ -304,6 +307,7 @@ class TimelineViewer:
         main_layout.addWidget(timeline_group)
 
         output_panel = QtWidgets.QWidget()
+        output_panel.setObjectName("outputPanel")
         output_layout = QtWidgets.QVBoxLayout(output_panel)
         output_layout.setContentsMargins(8, 8, 8, 8)
         output_layout.setSpacing(6)
@@ -335,7 +339,7 @@ class TimelineViewer:
         )
         self.main_view_dock = self._make_dock(
             "Main view",
-            main_panel,
+            self.main_panel,
             QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
         )
         self.properties_dock = self._make_dock(
@@ -348,11 +352,15 @@ class TimelineViewer:
             output_panel,
             QtCore.Qt.DockWidgetArea.BottomDockWidgetArea,
         )
+        self.topic_dock.setMinimumWidth(320)
+        self.main_view_dock.setMinimumWidth(380)
+        self.properties_dock.setMinimumWidth(220)
         self.window.splitDockWidget(
             self.main_view_dock,
             self.properties_dock,
             QtCore.Qt.Orientation.Horizontal,
         )
+        self._apply_theme()
         self._autosize_docks()
 
     def _build_menus(self) -> None:
@@ -400,6 +408,7 @@ class TimelineViewer:
         pane = self.TopicViewPane(self, parent)
         pane.set_view_title(f"View {self._next_view_id}")
         self._next_view_id += 1
+        pane.apply_theme(_theme_palette(self._theme))
         return pane
 
     def _layout_panes(self) -> None:
@@ -416,9 +425,20 @@ class TimelineViewer:
         self._queue_autosize_docks()
 
     def _queue_autosize_docks(self) -> None:
-        self.QtCore.QTimer.singleShot(0, self._autosize_docks)
+        if self._autosize_pending:
+            return
+        self._autosize_pending = True
+
+        def run() -> None:
+            self._autosize_pending = False
+            self._autosize_docks()
+
+        self.QtCore.QTimer.singleShot(0, run)
 
     def _autosize_docks(self) -> None:
+        if not self.window.isVisible():
+            return
+        self._autosize_topic_columns()
         visible_docks = [
             dock for dock in [
                 getattr(self, "topic_dock", None),
@@ -428,24 +448,123 @@ class TimelineViewer:
             if dock is not None and dock.isVisible()
         ]
         if len(visible_docks) >= 2:
+            topic_dock = getattr(self, "topic_dock", None)
+            main_dock = getattr(self, "main_view_dock", None)
+            properties_dock = getattr(self, "properties_dock", None)
+            targets = self._dock_width_targets(
+                has_topic=topic_dock in visible_docks,
+                has_main=main_dock in visible_docks,
+                has_properties=properties_dock in visible_docks,
+            )
             widths = []
             for dock in visible_docks:
-                if dock is getattr(self, "main_view_dock", None):
-                    widths.append(max(520, int(self.window.width() * 0.58)))
+                if dock is main_dock:
+                    widths.append(targets["main"])
+                elif dock is topic_dock:
+                    widths.append(targets["topic"])
                 else:
-                    widths.append(260)
-            self.window.resizeDocks(
+                    widths.append(targets["properties"])
+            self._animate_resize_docks(
                 visible_docks,
                 widths,
                 self.QtCore.Qt.Orientation.Horizontal,
             )
         output_dock = getattr(self, "output_dock", None)
         if output_dock is not None and output_dock.isVisible():
-            self.window.resizeDocks(
+            self._animate_resize_docks(
                 [output_dock],
                 [max(140, int(self.window.height() * 0.20))],
                 self.QtCore.Qt.Orientation.Vertical,
             )
+
+    def _dock_width_targets(
+        self,
+        *,
+        has_topic: bool,
+        has_main: bool,
+        has_properties: bool,
+    ) -> dict[str, int]:
+        available = max(640, self.window.width() - 28)
+        targets = {
+            "topic": self._preferred_topic_width() if has_topic else 0,
+            "main": 520 if has_main else 0,
+            "properties": 260 if has_properties else 0,
+        }
+        minimums = {
+            "topic": 320 if has_topic else 0,
+            "main": 380 if has_main else 0,
+            "properties": 220 if has_properties else 0,
+        }
+        overflow = sum(targets.values()) - available
+        for key in ("topic", "properties", "main"):
+            if overflow <= 0:
+                break
+            reducible = max(0, targets[key] - minimums[key])
+            reduction = min(overflow, reducible)
+            targets[key] -= reduction
+            overflow -= reduction
+        if overflow < 0 and has_main:
+            targets["main"] += abs(overflow)
+        return targets
+
+    def _preferred_topic_width(self) -> int:
+        columns = self._preferred_topic_column_widths()
+        if not columns:
+            return 340
+        max_width = max(420, int(self.window.width() * 0.38))
+        return max(320, min(max_width, sum(columns) + 26))
+
+    def _preferred_topic_column_widths(self) -> list[int]:
+        if not hasattr(self, "topic_tree"):
+            return []
+        metrics = self.topic_tree.fontMetrics()
+        topic_width = metrics.horizontalAdvance("Topic") + 36
+        category_width = metrics.horizontalAdvance("Category") + 28
+        count_width = metrics.horizontalAdvance("Count") + 28
+        for topic in self.session.list_topics():
+            parts = [part for part in topic.name.split("/") if part]
+            if not parts:
+                parts = [topic.name]
+            for depth, part in enumerate(parts):
+                indent = 18 * depth
+                topic_width = max(topic_width, indent + metrics.horizontalAdvance(part) + 58)
+            category_width = max(category_width, metrics.horizontalAdvance(topic.category or "") + 28)
+            count_width = max(count_width, metrics.horizontalAdvance(str(topic.message_count)) + 28)
+        topic_width = max(150, min(270, topic_width))
+        category_width = max(86, min(120, category_width))
+        count_width = max(68, min(76, count_width))
+        return [topic_width, category_width, count_width]
+
+    def _animate_resize_docks(self, docks: list[Any], targets: list[int], orientation: Any) -> None:
+        if not docks:
+            return
+        key = (
+            "horizontal"
+            if orientation == self.QtCore.Qt.Orientation.Horizontal
+            else "vertical"
+        )
+        self._dock_resize_generations[key] += 1
+        generation = self._dock_resize_generations[key]
+        starts = [
+            dock.width() if orientation == self.QtCore.Qt.Orientation.Horizontal else dock.height()
+            for dock in docks
+        ]
+        steps = 6
+
+        def step(index: int) -> None:
+            if generation != self._dock_resize_generations[key]:
+                return
+            progress = index / steps
+            eased = 1.0 - ((1.0 - progress) ** 3)
+            values = [
+                int(start + ((target - start) * eased))
+                for start, target in zip(starts, targets)
+            ]
+            self.window.resizeDocks(docks, values, orientation)
+            if index < steps:
+                self.QtCore.QTimer.singleShot(18, lambda: step(index + 1))
+
+        step(1)
 
     def _populate_topics(self) -> None:
         self.topic_tree.clear()
@@ -485,8 +604,11 @@ class TimelineViewer:
         self._autosize_topic_columns()
 
     def _autosize_topic_columns(self) -> None:
-        for column in range(self.topic_tree.columnCount()):
-            self.topic_tree.resizeColumnToContents(column)
+        widths = self._preferred_topic_column_widths()
+        for column, width in enumerate(widths):
+            self.topic_tree.setColumnWidth(column, width)
+        if hasattr(self, "topic_tree"):
+            self.topic_tree.setMinimumWidth(self._preferred_topic_width())
 
     def _load_metadata_time_bounds(self) -> None:
         reader = self.session.reader
@@ -545,6 +667,50 @@ class TimelineViewer:
             self._playback_rate = float(text.rstrip("x"))
         except ValueError:
             self._playback_rate = 1.0
+
+    def _set_theme(self, theme: str) -> None:
+        normalized = _normalize_theme(theme)
+        if normalized == self._theme:
+            return
+        self._theme = normalized
+        self._update_settings.setValue("ui/theme", normalized)
+        self._apply_theme()
+
+    def _apply_theme(self) -> None:
+        palette = _theme_palette(self._theme)
+        stylesheet = _theme_stylesheet(palette)
+        app = self.QtWidgets.QApplication.instance()
+        if app is not None:
+            try:
+                app.setStyle("Fusion")
+            except Exception:
+                pass
+            qt_palette = self.QtGui.QPalette()
+            roles = [
+                self.QtGui.QPalette.ColorGroup.Active,
+                self.QtGui.QPalette.ColorGroup.Inactive,
+            ]
+            for group in roles:
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.Window, self.QtGui.QColor(palette["window"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.WindowText, self.QtGui.QColor(palette["text"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.Base, self.QtGui.QColor(palette["input"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.AlternateBase, self.QtGui.QColor(palette["panel"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.Text, self.QtGui.QColor(palette["text"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.Button, self.QtGui.QColor(palette["button"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.ButtonText, self.QtGui.QColor(palette["text"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.Highlight, self.QtGui.QColor(palette["accent"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.HighlightedText, self.QtGui.QColor(palette["highlight_text"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.ToolTipBase, self.QtGui.QColor(palette["panel_alt"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.ToolTipText, self.QtGui.QColor(palette["text"]))
+                qt_palette.setColor(group, self.QtGui.QPalette.ColorRole.PlaceholderText, self.QtGui.QColor(palette["muted"]))
+            qt_palette.setColor(self.QtGui.QPalette.ColorGroup.Disabled, self.QtGui.QPalette.ColorRole.WindowText, self.QtGui.QColor(palette["muted"]))
+            qt_palette.setColor(self.QtGui.QPalette.ColorGroup.Disabled, self.QtGui.QPalette.ColorRole.Text, self.QtGui.QColor(palette["muted"]))
+            qt_palette.setColor(self.QtGui.QPalette.ColorGroup.Disabled, self.QtGui.QPalette.ColorRole.ButtonText, self.QtGui.QColor(palette["muted"]))
+            app.setPalette(qt_palette)
+            app.setStyleSheet(stylesheet)
+        self.window.setStyleSheet(stylesheet)
+        for pane in self._all_panes():
+            pane.apply_theme(palette)
 
     def _request_preview_update(self) -> None:
         if self.play_timer.isActive():
@@ -702,6 +868,15 @@ class TimelineViewer:
         preference_row.addWidget(preference_box)
         preference_row.addStretch(1)
         layout.addLayout(preference_row)
+
+        theme_row = self.QtWidgets.QHBoxLayout()
+        theme_row.addWidget(self.QtWidgets.QLabel("Appearance"))
+        dark_mode = self.QtWidgets.QCheckBox("Dark mode")
+        dark_mode.setChecked(self._theme == "dark")
+        dark_mode.toggled.connect(lambda checked: self._set_theme("dark" if checked else "light"))
+        theme_row.addWidget(dark_mode)
+        theme_row.addStretch(1)
+        layout.addLayout(theme_row)
 
         buttons = self.QtWidgets.QDialogButtonBox(
             self.QtWidgets.QDialogButtonBox.StandardButton.Close
@@ -1161,7 +1336,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             top_bar = QtWidgets.QHBoxLayout()
             top_bar.setContentsMargins(0, 0, 0, 0)
             self.title_label = QtWidgets.QLabel("Drop topic here")
-            self.title_label.setStyleSheet("font-weight: 600;")
+            self.title_label.setObjectName("viewTitle")
             self.render_button = QtWidgets.QToolButton()
             self.render_button.setText("Render")
             self.max_button = QtWidgets.QToolButton()
@@ -1198,6 +1373,14 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
         def set_view_title(self, title: str) -> None:
             self.view_title = title
             self._refresh_title()
+
+        def apply_theme(self, palette: dict[str, str]) -> None:
+            self.image_label.setStyleSheet(
+                f"background: {palette['viewer_bg']}; color: {palette['muted']};"
+            )
+            self.raw_text.setStyleSheet(
+                f"background: {palette['input']}; color: {palette['text']};"
+            )
 
         def clear_topic(self) -> None:
             self.topic = None
@@ -1501,6 +1684,229 @@ def _is_image_topic(topic: TopicInfo | None) -> bool:
     if topic is None:
         return False
     return topic.msgtype in {"sensor_msgs/msg/Image", "sensor_msgs/msg/CompressedImage"} or topic.category in IMAGE_CATEGORIES
+
+
+def _normalize_theme(theme: str) -> str:
+    return "dark" if theme.lower() == "dark" else "light"
+
+
+def _system_theme(QtWidgets: Any) -> str:
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return "light"
+    color = app.palette().color(app.palette().ColorRole.Window)
+    luminance = (0.2126 * color.red()) + (0.7152 * color.green()) + (0.0722 * color.blue())
+    return "dark" if luminance < 128 else "light"
+
+
+def _theme_palette(theme: str) -> dict[str, str]:
+    if _normalize_theme(theme) == "dark":
+        return {
+            "window": "#1b1b1b",
+            "panel": "#242424",
+            "panel_alt": "#2d2d2d",
+            "viewer_bg": "#101010",
+            "input": "#2a2a2a",
+            "text": "#f2f2f2",
+            "muted": "#b8b8b8",
+            "border": "#4a4a4a",
+            "button": "#303030",
+            "button_hover": "#3a3a3a",
+            "accent": "#ff9f1c",
+            "highlight_text": "#111111",
+            "progress": "#ff9f1c",
+        }
+    return {
+        "window": "#f3f4f6",
+        "panel": "#ffffff",
+        "panel_alt": "#f8fafc",
+        "viewer_bg": "#edf0f3",
+        "input": "#ffffff",
+        "text": "#202124",
+        "muted": "#636a73",
+        "border": "#c7ccd4",
+        "button": "#f5f7fa",
+        "button_hover": "#e9edf3",
+        "accent": "#d97706",
+        "highlight_text": "#ffffff",
+        "progress": "#d97706",
+    }
+
+
+def _theme_stylesheet(palette: dict[str, str]) -> str:
+    return f"""
+        QMainWindow, QDialog {{
+            background: {palette['window']};
+            color: {palette['text']};
+        }}
+        QWidget {{
+            color: {palette['text']};
+        }}
+        QMenuBar, QMenu {{
+            background: {palette['panel']};
+            color: {palette['text']};
+            border: 1px solid {palette['border']};
+        }}
+        QMenuBar::item:selected, QMenu::item:selected {{
+            background: {palette['button_hover']};
+        }}
+        QMenu::separator {{
+            background: {palette['border']};
+            height: 1px;
+            margin: 4px 8px;
+        }}
+        QDockWidget {{
+            color: {palette['text']};
+            titlebar-close-icon: none;
+            titlebar-normal-icon: none;
+        }}
+        QDockWidget::title {{
+            background: {palette['panel']};
+            color: {palette['text']};
+            padding: 4px 6px;
+            font-weight: 600;
+        }}
+        QWidget#centralSpacer {{
+            background: {palette['window']};
+        }}
+        QWidget#mainPanel, QWidget#viewGrid {{
+            background: {palette['viewer_bg']};
+        }}
+        QWidget#propertiesPanel, QWidget#propertiesViewport, QScrollArea#propertiesScroll,
+        QWidget#outputPanel {{
+            background: {palette['panel']};
+            color: {palette['text']};
+        }}
+        QFrame#topicViewPane {{
+            border: 1px solid {palette['border']};
+            border-radius: 4px;
+            background: {palette['viewer_bg']};
+            color: {palette['text']};
+        }}
+        QLabel {{
+            background: transparent;
+            color: {palette['text']};
+        }}
+        QLabel#viewTitle {{
+            color: {palette['text']};
+            font-weight: 600;
+        }}
+        QTreeWidget, QTextEdit, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QScrollArea {{
+            background: {palette['input']};
+            color: {palette['text']};
+            border: 1px solid {palette['border']};
+            selection-background-color: {palette['accent']};
+            selection-color: {palette['highlight_text']};
+        }}
+        QTreeWidget {{
+            alternate-background-color: {palette['panel_alt']};
+            show-decoration-selected: 1;
+        }}
+        QHeaderView::section {{
+            background: {palette['panel_alt']};
+            color: {palette['text']};
+            border: 0;
+            border-right: 1px solid {palette['border']};
+            border-bottom: 1px solid {palette['border']};
+            padding: 4px 6px;
+        }}
+        QTreeWidget::branch {{
+            background: {palette['input']};
+        }}
+        QTreeWidget::item:selected {{
+            background: {palette['accent']};
+            color: {palette['highlight_text']};
+        }}
+        QCheckBox {{
+            background: transparent;
+            color: {palette['text']};
+            spacing: 6px;
+        }}
+        QCheckBox::indicator {{
+            width: 14px;
+            height: 14px;
+            border: 1px solid {palette['border']};
+            border-radius: 3px;
+            background: {palette['input']};
+        }}
+        QCheckBox::indicator:checked {{
+            background: {palette['accent']};
+            border-color: {palette['accent']};
+        }}
+        QPushButton, QToolButton {{
+            background: {palette['button']};
+            color: {palette['text']};
+            border: 1px solid {palette['border']};
+            border-radius: 4px;
+            padding: 3px 8px;
+        }}
+        QPushButton:hover, QToolButton:hover {{
+            background: {palette['button_hover']};
+        }}
+        QPushButton:disabled, QToolButton:disabled {{
+            color: {palette['muted']};
+        }}
+        QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button,
+        QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+            background: {palette['button']};
+            border-left: 1px solid {palette['border']};
+            width: 18px;
+        }}
+        QComboBox QAbstractItemView {{
+            background: {palette['input']};
+            color: {palette['text']};
+            selection-background-color: {palette['accent']};
+            selection-color: {palette['highlight_text']};
+        }}
+        QGroupBox {{
+            color: {palette['text']};
+            border: 1px solid {palette['border']};
+            border-radius: 4px;
+            font-weight: 600;
+            margin-top: 8px;
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            left: 8px;
+            padding: 0 4px;
+        }}
+        QScrollBar:vertical, QScrollBar:horizontal {{
+            background: {palette['panel']};
+            border: 0;
+            margin: 0;
+        }}
+        QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+            background: {palette['border']};
+            border-radius: 4px;
+            min-height: 24px;
+            min-width: 24px;
+        }}
+        QScrollBar::add-line, QScrollBar::sub-line {{
+            width: 0;
+            height: 0;
+        }}
+        QProgressBar {{
+            background: {palette['input']};
+            color: {palette['text']};
+            border: 1px solid {palette['border']};
+            border-radius: 3px;
+            text-align: center;
+        }}
+        QProgressBar::chunk {{
+            background: {palette['progress']};
+        }}
+        QSlider::groove:horizontal {{
+            background: {palette['border']};
+            height: 4px;
+            border-radius: 2px;
+        }}
+        QSlider::handle:horizontal {{
+            background: {palette['accent']};
+            width: 14px;
+            margin: -5px 0;
+            border-radius: 7px;
+        }}
+    """
 
 
 def _local_changelog_text() -> str:

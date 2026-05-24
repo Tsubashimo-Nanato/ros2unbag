@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v2.0.0`
+Current release: `v1.5.1`
 
 Release preparation date: 2026-05-24
 
-This project has been publicly released and is currently maintained at version `2.0.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.5.1`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -89,7 +89,7 @@ ros2unbag upgrade --print-only
 Upgrade from a specific GitHub tag, branch, or commit:
 
 ```powershell
-ros2unbag upgrade --ref v2.0.0 --yes
+ros2unbag upgrade --ref v1.5.1 --yes
 ```
 
 The running shell process cannot reload upgraded Python code in place. Restart `ros2unbag` after a successful upgrade.
@@ -292,7 +292,7 @@ Upgrade the installed package:
 
 ```powershell
 ros2unbag upgrade --yes
-ros2unbag upgrade --ref v2.0.0 --yes
+ros2unbag upgrade --ref v1.5.1 --yes
 ros2unbag upgrade --source pypi --yes
 ```
 
@@ -394,6 +394,7 @@ The optional GUI is a Windows-oriented, offline, view-only RViz2-like shell:
 - Use `File > Import bag...` to browse directly for a bag folder, or drag and drop a bag folder or supported bag file onto the window to open it.
 - Use `File > Export...` to export selected topics through the same compatibility rules used by the CLI.
 - Use `File > Version...` to view the installed version, local changelog, GitHub update status, release notes for newer versions, and the GUI upgrade action.
+- Use the Dark mode switch in `File > Version...` to choose light or dark GUI colors.
 - Use the `Windows` menu to show or hide dockable panels such as `Topic list`, `Main view`, `Properties`, and `Output`.
 - Move, float, tab, or close GUI panels using normal Qt dock-window behavior. All panels open by default and can be restored from the `Windows` menu.
 - On first GUI startup, choose whether to check for updates, auto-update from GitHub releases, or turn the startup update checker off.
@@ -404,6 +405,7 @@ The optional GUI is a Windows-oriented, offline, view-only RViz2-like shell:
 - Preview image topics, point cloud topics, and scalar/custom message summaries.
 - Render an image topic before playback, then use Play/Pause to play from the rendered preview cache instead of decoding every frame on the timer.
 - Show GUI progress while opening bags, rendering image playback caches, and exporting topics.
+- Resize dock panels and topic-list columns after import/show/hide using bounded, eased resize transitions.
 - Right-click a view to split horizontally or vertically, up to a 4x4 grid.
 - Each view tile has a title and a slim top bar for rendering, maximizing/restoring, deleting, or opening the view as a pop-out window.
 - Save non-destructive display/export settings to `ros2unbag_session.json`.
@@ -429,7 +431,7 @@ ros2unbag> gui .\my_bag
 
 The GUI does not rewrite bag files. It stores view settings such as visibility, color, opacity, point size, decimation, sync offset, and export preference in the sidecar JSON file.
 
-The GUI preview path is optimized for responsive scrubbing: slider updates are debounced for manual scrubbing, but playback updates visible panes immediately on each timer tick. For image playback, the view renders display-sized frames once and plays from that cache. Dock panels and topic columns are resized after import and when panels are shown/hidden. Lossless exports still use the dedicated exporter commands and are not affected by preview scaling.
+The GUI preview path is optimized for responsive scrubbing: slider updates are debounced for manual scrubbing, but playback updates visible panes immediately on each timer tick. For image playback, the view renders display-sized frames once and plays from that cache. Dock panels and topic columns are resized after import and when panels are shown/hidden; the unused center spacer is collapsed so the main view can use the available workspace. The main view, topic list, properties panel, output panel, dialogs, and controls follow the selected light or dark theme. Lossless exports still use the dedicated exporter commands and are not affected by preview scaling.
 
 ## Project Structure
 
