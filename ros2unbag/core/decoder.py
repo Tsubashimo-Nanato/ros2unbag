@@ -224,7 +224,7 @@ def _mask_detection_summary(records: list[Any]) -> dict[str, Any] | None:
     unique_values: list[int | float | str] = []
     evidence: list[str] = []
     decode_warnings: list[str] = []
-    supported_grayscale_encodings = {"mono8", "8uc1"}
+    supported_grayscale_encodings = {"mono8", "8uc1", "mono16", "16uc1"}
 
     for record in records:
         decoded = getattr(record, "decoded", None)
@@ -285,7 +285,7 @@ def _mask_detection_summary(records: list[Any]) -> dict[str, Any] | None:
 
 
 def decode_sensor_image(_message: object) -> Any:
-    """Decode common 8-bit sensor_msgs/Image encodings into OpenCV-compatible arrays.
+    """Decode common sensor_msgs/Image encodings into OpenCV-compatible arrays.
 
     Color images are returned in OpenCV channel order so image/video exporters can
     write frames without guessing whether conversion has already happened.
@@ -300,19 +300,23 @@ def decode_sensor_image(_message: object) -> Any:
     data = _raw_image_bytes(getattr(_message, "data", b""))
     warnings: list[str] = []
 
-    channels_by_encoding = {
-        "mono8": 1,
-        "8uc1": 1,
-        "rgb8": 3,
-        "bgr8": 3,
-        "rgba8": 4,
-        "bgra8": 4,
+    specs_by_encoding = {
+        "mono8": (np.uint8, 1),
+        "8uc1": (np.uint8, 1),
+        "mono16": (np.uint16, 1),
+        "16uc1": (np.uint16, 1),
+        "32fc1": (np.float32, 1),
+        "rgb8": (np.uint8, 3),
+        "bgr8": (np.uint8, 3),
+        "rgba8": (np.uint8, 4),
+        "bgra8": (np.uint8, 4),
     }
-    channels = channels_by_encoding.get(encoding)
-    if channels is None:
+    spec = specs_by_encoding.get(encoding)
+    if spec is None:
         raise ValueError(f"Unsupported sensor_msgs/Image encoding: {encoding!r}")
+    dtype, channels = spec
 
-    bytes_per_pixel = channels
+    bytes_per_pixel = int(np.dtype(dtype).itemsize) * channels
     expected_row_bytes = width * bytes_per_pixel
     if step == 0:
         step = expected_row_bytes
@@ -326,9 +330,9 @@ def decode_sensor_image(_message: object) -> Any:
     if len(data) > required:
         warnings.append(f"Ignored {len(data) - required} trailing image data bytes.")
 
-    flat = np.frombuffer(data[:required], dtype=np.uint8)
-    rows = flat.reshape(height, step)
-    packed = rows[:, :expected_row_bytes]
+    byte_rows = np.frombuffer(data[:required], dtype=np.uint8).reshape(height, step)
+    packed_bytes = byte_rows[:, :expected_row_bytes].copy()
+    packed = np.frombuffer(packed_bytes.tobytes(), dtype=dtype)
     if channels == 1:
         array = packed.reshape(height, width).copy()
     else:

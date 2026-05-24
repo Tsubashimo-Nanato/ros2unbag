@@ -121,8 +121,11 @@ def export_topic_video(
 
 def _image_for_video(frame: ImageFrame) -> object:
     import cv2
+    import numpy as np
 
     image = frame.array
+    if image.dtype != np.uint8:
+        image = cv2.normalize(image, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     if image.ndim == 2:
         return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     if image.ndim == 3 and image.shape[2] == 4:

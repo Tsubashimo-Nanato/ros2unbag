@@ -109,8 +109,15 @@ def _decode_record_frame(record: object) -> ImageFrame:
 
 def _image_for_still(frame: ImageFrame, suffix: str) -> object:
     import cv2
+    import numpy as np
 
     image = frame.array
+    if image.dtype == np.float32 or image.dtype == np.float64:
+        normalized = cv2.normalize(image, None, 0, 65535 if suffix == "png" else 255, cv2.NORM_MINMAX)
+        return normalized.astype(np.uint16 if suffix == "png" else np.uint8)
+    if suffix == "jpg" and image.dtype != np.uint8:
+        normalized = cv2.normalize(image, None, 0, 255, cv2.NORM_MINMAX)
+        return normalized.astype(np.uint8)
     if suffix == "jpg" and getattr(image, "ndim", 0) == 3 and image.shape[2] == 4:
         return cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
     return image

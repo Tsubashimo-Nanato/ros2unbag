@@ -7,10 +7,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+
 from ros2unbag.core.models import MessageRecord
 from ros2unbag.core.point_cloud import point_cloud_rows
 from ros2unbag.core.session import _coverage_warnings
 from ros2unbag.exporters.csv_exporter import export_topic_csv
+from ros2unbag.exporters.npz_exporter import export_topic_npz
+from ros2unbag.exporters.point_cloud_exporter import export_topic_point_clouds
 
 
 @dataclasses.dataclass
@@ -114,6 +118,65 @@ class PointCloudExportTests(unittest.TestCase):
         self.assertEqual(rows[0]["point_index"], "0")
         self.assertEqual(rows[1]["x"], "4.0")
         self.assertIn("PointCloud2 CSV expands 1 source messages into 2 point rows.", result.warnings)
+
+    def test_pcd_export_writes_point_cloud_sequence(self) -> None:
+        topic = "/points"
+        record = MessageRecord(
+            topic=topic,
+            timestamp_ns=100,
+            msgtype="sensor_msgs/msg/PointCloud2",
+            raw=b"raw",
+            decoded=_fake_cloud(),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = export_topic_point_clouds(FakeReader([record]), topic, Path(temp_dir), point_format="pcd")
+            output_dir = Path(result.output_path)
+            pcd_text = (output_dir / "000000.pcd").read_text(encoding="ascii")
+            timestamps_exists = (output_dir / "timestamps.csv").exists()
+
+        self.assertEqual(result.message_count, 1)
+        self.assertIn("FIELDS x y z", pcd_text)
+        self.assertIn("POINTS 2", pcd_text)
+        self.assertTrue(timestamps_exists)
+
+    def test_ply_export_writes_point_cloud_sequence(self) -> None:
+        topic = "/points"
+        record = MessageRecord(
+            topic=topic,
+            timestamp_ns=100,
+            msgtype="sensor_msgs/msg/PointCloud2",
+            raw=b"raw",
+            decoded=_fake_cloud(),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = export_topic_point_clouds(FakeReader([record]), topic, Path(temp_dir), point_format="ply")
+            ply_text = (Path(result.output_path) / "000000.ply").read_text(encoding="ascii")
+
+        self.assertIn("element vertex 2", ply_text)
+        self.assertIn("property float x", ply_text)
+
+    def test_npz_export_writes_point_cloud_frame_arrays(self) -> None:
+        topic = "/points"
+        record = MessageRecord(
+            topic=topic,
+            timestamp_ns=100,
+            msgtype="sensor_msgs/msg/PointCloud2",
+            raw=b"raw",
+            decoded=_fake_cloud(),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = export_topic_npz(FakeReader([record]), topic, Path(temp_dir), bag_start_timestamp_ns=50)
+            npz_path = Path(result.output_path) / "000000.npz"
+            with np.load(npz_path) as data:
+                x_values = data["x"].tolist()
+                timestamp_ns = data["timestamp_ns"].item()
+
+        self.assertEqual(result.message_count, 1)
+        self.assertEqual(x_values, [1.0, 4.0])
+        self.assertEqual(timestamp_ns, 100)
 
     def test_coverage_warning_explains_topic_range_vs_bag_range(self) -> None:
         warnings = _coverage_warnings(

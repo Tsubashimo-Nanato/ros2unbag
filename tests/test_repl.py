@@ -205,6 +205,22 @@ class ReplTests(unittest.TestCase):
         self.assertEqual(len(completions), 1)
         self.assertIn("bagdata", completions[0].text)
 
+    def test_gui_path_completion(self) -> None:
+        completer = Ros2UnbagCompleter(Session())
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bag_dir = Path(temp_dir) / "bagdata"
+            bag_dir.mkdir()
+            completions = list(
+                completer.get_completions(
+                    Document(f"gui {Path(temp_dir) / 'ba'}"),
+                    object(),
+                )
+            )
+
+        self.assertEqual(len(completions), 1)
+        self.assertIn("bagdata", completions[0].text)
+
 
 if __name__ == "__main__":
     unittest.main()

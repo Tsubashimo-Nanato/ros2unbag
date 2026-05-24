@@ -54,6 +54,21 @@ class ExportCompatibilityTests(unittest.TestCase):
 
         self.assertFalse(reader.iterated)
 
+    def test_point_cloud_allows_native_and_data_exports(self) -> None:
+        topic = TopicInfo(
+            name="/points",
+            msgtype="sensor_msgs/msg/PointCloud2",
+            message_count=1,
+            category="point_cloud",
+        )
+
+        formats = compatible_export_formats(topic)
+
+        for export_format in ["csv", "parquet", "sqlite", "jsonl", "raw", "npz", "pcd", "ply"]:
+            self.assertIn(export_format, formats)
+        for export_format in ["png", "jpg", "mp4"]:
+            self.assertNotIn(export_format, formats)
+
     def test_image_topic_keeps_flexible_data_exports(self) -> None:
         topic = TopicInfo(
             name="/camera/image_raw",
@@ -63,6 +78,7 @@ class ExportCompatibilityTests(unittest.TestCase):
         )
 
         self.assertIn("csv", compatible_export_formats(topic))
+        self.assertIn("npz", compatible_export_formats(topic))
         self.assertIn("raw", compatible_export_formats(topic))
         self.assertIn("mp4", compatible_export_formats(topic))
 

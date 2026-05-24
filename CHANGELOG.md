@@ -2,6 +2,47 @@
 
 All notable changes for this project will be documented in this file.
 
+## [Unreleased]
+
+No unreleased changes currently documented.
+
+## [2.0.0] - 2026-05-24
+
+### Added
+
+- Added Windows `install.bat`, `uninstall.bat`, and repo-local `ros2unbag.bat` launch scripts.
+- Added native `pcd` and `ply` sequence exports for decoded `sensor_msgs/msg/PointCloud2` topics.
+- Added `npz` export for point clouds, numeric topics, and image/depth image frames.
+- Added an optional PySide6 GUI command, `ros2unbag gui [BAG_PATH]`, with an offline timeline viewer shell and sidecar display settings.
+- Added `gui [BAG_PATH]` inside the interactive shell.
+- Added GUI drag-and-drop support for bag folders/files.
+- Added GUI `File > Import bag...`, `File > Export...`, and `File > Version...` actions.
+- Added GUI topic drag-and-drop into preview panes.
+- Added GUI right-click pane splitting with a 4x4 maximum grid.
+- Added GUI pane controls for render, maximize/restore, pop-out, and delete.
+- Added GUI progress feedback for bag loading, image playback-cache rendering, and topic exports.
+- Added GUI `Windows` menu toggles for dockable panels.
+- Added GUI playback rate selection for `0.25x`, `0.5x`, `1x`, `2x`, and `4x`.
+- Added GUI version/update dialog with current version, local changelog, GitHub update check, release notes for newer versions, and an upgrade button.
+- Added first-startup GUI update preference prompt for check-only, auto-update, or update-checker-off modes.
+- Added GUI tests for dock-menu creation, default folded topic tree behavior, playback rate changes, and Version menu availability.
+- Added update-check tests for GitHub release and tag metadata parsing.
+- Added a reusable preview API for lazy nearest-message image, point cloud, scalar, and summary previews.
+- Added cancellation primitives for future GUI background jobs.
+
+### Changed
+
+- Point cloud CSV, Parquet, and SQLite exports now stream or batch point rows instead of collecting the full bag export in one in-memory list.
+- Image decoding now supports `mono16`, `16UC1`, and `32FC1`; non-8-bit display exports are normalized where needed.
+- `export-all` can use point cloud native/default formats after decoded point cloud scans.
+- GUI timeline preview now debounces slider updates and uses a forward cursor cache for smoother image/video scrubbing.
+- GUI Play/Pause now renders image topics to display-sized preview frames before playback, avoiding per-tick image decoding during playback.
+- GUI playback now updates visible panes immediately while the timer runs instead of waiting for the manual-scrub debounce timer.
+- GUI topic trees now start folded by default.
+- GUI `File > Import bag...` now opens the folder browser directly instead of showing an intermediate import dialog.
+- GUI panels now use movable, closable Qt dock widgets instead of a fixed crowded splitter layout.
+- GUI view tiles now have stable titles and less crowded labels.
+
 ## [1.4.3] - 2026-05-18
 
 Shell upgrade and Windows progress fallback release.

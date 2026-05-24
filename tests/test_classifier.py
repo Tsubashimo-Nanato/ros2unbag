@@ -60,13 +60,13 @@ class ClassifierTests(unittest.TestCase):
     def test_point_cloud_suggests_tabular_exports(self) -> None:
         self.assertEqual(
             suggested_exports_for_category("point_cloud"),
-            ["csv", "parquet", "sqlite", "jsonl", "raw"],
+            ["pcd", "ply", "npz", "csv", "parquet", "sqlite", "jsonl", "raw"],
         )
 
     def test_image_suggestions_include_tabular_and_raw_exports(self) -> None:
         self.assertEqual(
             suggested_exports_for_category("image"),
-            ["png", "jpg", "mp4", "csv", "jsonl", "raw"],
+            ["png", "jpg", "mp4", "npz", "csv", "jsonl", "raw"],
         )
 
 

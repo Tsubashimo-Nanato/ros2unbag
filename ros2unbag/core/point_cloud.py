@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterator
 
 
 POINT_FIELD_FORMATS: dict[int, tuple[str, int]] = {
@@ -16,6 +16,28 @@ POINT_FIELD_FORMATS: dict[int, tuple[str, int]] = {
     8: ("d", 8),   # FLOAT64
 }
 
+POINT_FIELD_TYPES: dict[int, str] = {
+    1: "I",   # INT8
+    2: "U",   # UINT8
+    3: "I",   # INT16
+    4: "U",   # UINT16
+    5: "I",   # INT32
+    6: "U",   # UINT32
+    7: "F",   # FLOAT32
+    8: "F",   # FLOAT64
+}
+
+PLY_FIELD_TYPES: dict[int, str] = {
+    1: "char",
+    2: "uchar",
+    3: "short",
+    4: "ushort",
+    5: "int",
+    6: "uint",
+    7: "float",
+    8: "double",
+}
+
 
 @dataclass(slots=True)
 class PointCloudFieldSpec:
@@ -26,6 +48,10 @@ class PointCloudFieldSpec:
 
 
 def point_cloud_rows(message: object) -> list[dict[str, object]]:
+    return list(iter_point_cloud_rows(message))
+
+
+def iter_point_cloud_rows(message: object) -> Iterator[dict[str, object]]:
     fields = [_field_spec(field) for field in getattr(message, "fields", [])]
     fields = [field for field in fields if field.datatype in POINT_FIELD_FORMATS]
     data = _data_bytes(getattr(message, "data", b""))
@@ -35,10 +61,9 @@ def point_cloud_rows(message: object) -> list[dict[str, object]]:
     height = int(getattr(message, "height", 0) or 0)
     is_bigendian = bool(getattr(message, "is_bigendian", False))
     if point_step <= 0 or not data:
-        return []
+        return
     endian = ">" if is_bigendian else "<"
 
-    rows: list[dict[str, object]] = []
     if width > 0 and height > 0:
         row_stride = row_step if row_step >= width * point_step else width * point_step
         for cloud_row in range(height):
@@ -54,8 +79,8 @@ def point_cloud_rows(message: object) -> list[dict[str, object]]:
                 }
                 for field in fields:
                     row.update(_read_field(data, base_offset, point_step, field, endian))
-                rows.append(row)
-        return rows
+                yield row
+        return
 
     point_count = len(data) // point_step
     for point_index in range(point_count):
@@ -63,8 +88,7 @@ def point_cloud_rows(message: object) -> list[dict[str, object]]:
         row = {"point_index": point_index}
         for field in fields:
             row.update(_read_field(data, base_offset, point_step, field, endian))
-        rows.append(row)
-    return rows
+        yield row
 
 
 def point_cloud_field_names(message: object) -> list[str]:
@@ -78,6 +102,59 @@ def point_cloud_field_names(message: object) -> list[str]:
         else:
             names.extend(f"{spec.name}.{index}" for index in range(spec.count))
     return names
+
+
+def point_cloud_field_specs(message: object) -> list[PointCloudFieldSpec]:
+    specs = [_field_spec(field) for field in getattr(message, "fields", [])]
+    return [spec for spec in specs if spec.datatype in POINT_FIELD_FORMATS]
+
+
+def point_cloud_point_count(message: object) -> int:
+    width = int(getattr(message, "width", 0) or 0)
+    height = int(getattr(message, "height", 0) or 0)
+    if width > 0 and height > 0:
+        return width * height
+    data = _data_bytes(getattr(message, "data", b""))
+    point_step = int(getattr(message, "point_step", 0) or 0)
+    return 0 if point_step <= 0 else len(data) // point_step
+
+
+def expanded_point_field_names(message: object) -> list[str]:
+    names: list[str] = []
+    for spec in point_cloud_field_specs(message):
+        if spec.count <= 1:
+            names.append(_safe_field_name(spec.name))
+        else:
+            names.extend(f"{_safe_field_name(spec.name)}_{index}" for index in range(spec.count))
+    return names
+
+
+def expanded_point_row(message: object, row: dict[str, object]) -> list[object]:
+    values: list[object] = []
+    for spec in point_cloud_field_specs(message):
+        if spec.count <= 1:
+            values.append(row.get(spec.name, 0))
+        else:
+            for index in range(spec.count):
+                values.append(row.get(f"{spec.name}.{index}", 0))
+    return values
+
+
+def point_field_pcd_size(spec: PointCloudFieldSpec) -> int:
+    return POINT_FIELD_FORMATS[spec.datatype][1]
+
+
+def point_field_pcd_type(spec: PointCloudFieldSpec) -> str:
+    return POINT_FIELD_TYPES[spec.datatype]
+
+
+def point_field_ply_type(spec: PointCloudFieldSpec) -> str:
+    return PLY_FIELD_TYPES[spec.datatype]
+
+
+def _safe_field_name(name: str) -> str:
+    safe = "".join(char if char.isalnum() or char == "_" else "_" for char in name.strip())
+    return safe or "field"
 
 
 def _field_spec(field: object) -> PointCloudFieldSpec:

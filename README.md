@@ -4,15 +4,15 @@ Unbag your ROS2 bags in Windows!
 
 `ros2unbag` is a Windows-based Python command-line tool for inspecting ROS bag files offline. It reads bags without having to play them on Linux, lists topics and message types, builds timestamp indexes, classifies topics into practical export categories, and exports selected data into Windows-readable formats.
 
-This tool is oriented toward researchers who prefer working in Windows rather than moving every bag-inspection task into a Linux ROS environment. It is designed for quickly extracting bag data into practical analysis formats such as CSV, Parquet, SQLite, PNG/JPG image sequences, MP4 video, JSONL, and raw serialized dumps.
+This tool is oriented toward researchers who prefer working in Windows rather than moving every bag-inspection task into a Linux ROS environment. It is designed for quickly extracting bag data into practical analysis formats such as CSV, Parquet, SQLite, PNG/JPG image sequences, MP4 video, PCD/PLY point cloud sequences, NPZ arrays, JSONL, and raw serialized dumps.
 
 ## Status
 
-Current release: `v1.4.3`
+Current release: `v2.0.0`
 
-Release preparation date: 2026-05-18
+Release preparation date: 2026-05-24
 
-This project has been publicly released and is currently maintained at version `1.4.3`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `2.0.0`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -30,6 +30,8 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - MP4 export for decoded image topics using constant FPS.
 - Parquet export for flattened tabular topic data.
 - SQLite session export with topic metadata, message rows, export records, and per-topic flattened tables.
+- PCD and PLY sequence export for decoded `sensor_msgs/msg/PointCloud2` topics.
+- NPZ export for point clouds, numeric topics, and image/depth frames.
 - Timestamp sidecar CSV files for image, video, and raw exports.
 - Raw serialized dumps for unsupported or undecoded topics.
 - Topic-aware export validation that blocks incompatible media exports while keeping flexible data exports available.
@@ -39,6 +41,7 @@ Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen
 - Non-flooding progress display for bag opening and block-style progress bars for scan/indexing, exports, image sequence output, and MP4 video output, with ETA when totals are available.
 - Metadata-based bag time bounds when available, avoiding a full-bag pre-index scan for single-topic exports.
 - Streaming nearest-message inspection when bag time bounds are available, avoiding a full in-memory timestamp index for common `inspect --time` workflows.
+- Optional PySide6 timeline viewer shell for offline bag inspection and non-destructive display/export settings.
 
 ## Installation
 
@@ -49,6 +52,27 @@ py -m pip install -e .
 ```
 
 The distribution name, installed command, and Python import package are all `ros2unbag`.
+
+On Windows, the Python Scripts directory is sometimes not on `PATH`, so `py -m pip install -e .` may succeed while `ros2unbag` is still not recognized in a new terminal. The repository includes batch helpers for this:
+
+```bat
+install.bat
+install.bat gui
+```
+
+`install.bat` installs the package, adds the current Python Scripts directory to the user `PATH`, and keeps a repo-local fallback launcher:
+
+```bat
+ros2unbag.bat
+```
+
+Restart the terminal after running `install.bat` before using `ros2unbag` directly.
+
+Optional GUI install:
+
+```powershell
+py -m pip install -e .[gui]
+```
 
 Upgrade an installed copy from the GitHub repository:
 
@@ -65,7 +89,7 @@ ros2unbag upgrade --print-only
 Upgrade from a specific GitHub tag, branch, or commit:
 
 ```powershell
-ros2unbag upgrade --ref v1.4.3 --yes
+ros2unbag upgrade --ref v2.0.0 --yes
 ```
 
 The running shell process cannot reload upgraded Python code in place. Restart `ros2unbag` after a successful upgrade.
@@ -75,6 +99,14 @@ Uninstall:
 ```powershell
 ros2unbag uninstall --yes
 ```
+
+Windows batch uninstall:
+
+```bat
+uninstall.bat
+```
+
+The uninstall script does not remove the Python Scripts directory from `PATH` because that directory may be shared by other Python tools.
 
 Preview the exact uninstall command:
 
@@ -117,6 +149,7 @@ ros2unbag> export /aiformula_control/joy --format sqlite --out .\export
 ros2unbag> export /camera/image_raw --format mp4 --fps 30 --out .\export
 ros2unbag> export-select
 ros2unbag> export-all --out .\export
+ros2unbag> gui
 ros2unbag> upgrade
 ros2unbag> close
 ros2unbag> exit
@@ -130,10 +163,11 @@ Interactive commands:
 - `topics -all`
 - `topics -s`
 - `dur TOPIC`
-- `export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]`
+- `export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw|npz|pcd|ply --out OUT_DIR [--fps FPS]`
 - `export-select`
 - `export-all --out OUT_DIR`
 - `inspect --time SECONDS [--dur TOPIC] [--absolute-ns]`
+- `gui [BAG_PATH]`
 - `upgrade [--source github|pypi] [--ref REF] [--yes]`
 - `close`
 - `help`
@@ -199,6 +233,10 @@ ros2unbag export .\my_bag --topic /diagnostics --format jsonl --out .\export
 ros2unbag export .\my_bag --topic /camera/image_raw --format png --out .\export
 ros2unbag export .\my_bag --topic /camera/image_raw --format jpg --out .\export
 ros2unbag export .\my_bag --topic /camera/image_raw --format mp4 --fps 30 --out .\export
+ros2unbag export .\my_bag --topic /camera/depth --format npz --out .\export
+ros2unbag export .\my_bag --topic /points --format pcd --out .\export
+ros2unbag export .\my_bag --topic /points --format ply --out .\export
+ros2unbag export .\my_bag --topic /points --format npz --out .\export
 ros2unbag export .\my_bag --topic /unknown/custom_topic --format raw --out .\export
 ```
 
@@ -244,11 +282,17 @@ List recognized export formats:
 ros2unbag formats
 ```
 
+Start the optional GUI timeline viewer:
+
+```powershell
+ros2unbag gui .\my_bag
+```
+
 Upgrade the installed package:
 
 ```powershell
 ros2unbag upgrade --yes
-ros2unbag upgrade --ref v1.4.3 --yes
+ros2unbag upgrade --ref v2.0.0 --yes
 ros2unbag upgrade --source pypi --yes
 ```
 
@@ -290,7 +334,25 @@ export/videos/<sanitized_topic_name>_timestamps.csv
 
 MP4 export currently uses `constant_fps` mode. The video plays frames sequentially at `--fps`, while the timestamp sidecar preserves the true ROS timestamps because bag timestamps are not guaranteed to be uniform.
 
-Timestamp CSV sidecars include the source ROS timestamp in nanoseconds and `timestamp_sec_from_start` relative to the bag start. Image and video sidecars also include frame index, dimensions, encoding, and output filename or video time.
+Timestamp CSV sidecars include the source ROS timestamp in nanoseconds and `timestamp_sec_from_start` relative to the bag start. Image, video, point cloud, and NPZ sidecars also include frame index and output filename plus format-specific metadata.
+
+For point cloud sequence export, the output layout is:
+
+```text
+export/pointclouds/<sanitized_topic_name>/
+  000000.pcd
+  000001.pcd
+  timestamps.csv
+```
+
+Use `--format ply` for PLY output in the same folder layout. PCD/PLY exports are lossless for supported numeric `PointCloud2` fields and preserve common fields such as `x`, `y`, `z`, `intensity`, `rgb`, `rgba`, `ring`, and `time` when present.
+
+NPZ export writes either one numeric topic file or a per-frame sequence for image and point cloud topics:
+
+```text
+export/npz/<sanitized_topic_name>.npz
+export/npz/<sanitized_topic_name>/000000.npz
+```
 
 Parquet export writes one `.parquet` file per selected topic:
 
@@ -312,19 +374,62 @@ Implemented:
 
 - `csv` for scalar and simple decoded structs
 - `csv` point-row export for decoded `sensor_msgs/msg/PointCloud2`
-- `csv`, `parquet`, `sqlite`, `jsonl`, and `raw` remain available for image topics when tabular/raw analysis is useful
+- `csv`, `parquet`, `sqlite`, `jsonl`, `npz`, and `raw` remain available for image topics when tabular/raw analysis is useful
 - `parquet` for flattened tabular topic data
 - `sqlite` for a session database with metadata, message rows, and per-topic flattened tables
+- `pcd` and `ply` point cloud sequences for decoded `sensor_msgs/msg/PointCloud2`
+- `npz` compressed NumPy arrays for point clouds, image/depth frames, and numeric decoded messages
 - `jsonl` for arbitrary decoded messages
 - `png` and `jpg` image sequences for decoded `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage`
 - `mp4` video for decoded image topics, with a timestamp sidecar CSV
 - `raw` for serialized CDR/message bytes with a timestamp sidecar CSV
 
-Media formats `png`, `jpg`, and `mp4` are restricted to decoded ROS image topics such as `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage`. Data-oriented formats remain intentionally flexible across topic types.
+Media formats `png`, `jpg`, and `mp4` are restricted to decoded ROS image topics such as `sensor_msgs/msg/Image` and `sensor_msgs/msg/CompressedImage`. Point cloud formats `pcd` and `ply` are restricted to decoded `sensor_msgs/msg/PointCloud2`. Data-oriented formats remain intentionally flexible across topic types.
 
-Planned:
+## GUI Timeline Viewer
 
-- GUI timeline viewer
+The optional GUI is a Windows-oriented, offline, view-only RViz2-like shell:
+
+- Open a bag without playing it or subscribing to ROS.
+- Use `File > Import bag...` to browse directly for a bag folder, or drag and drop a bag folder or supported bag file onto the window to open it.
+- Use `File > Export...` to export selected topics through the same compatibility rules used by the CLI.
+- Use `File > Version...` to view the installed version, local changelog, GitHub update status, release notes for newer versions, and the GUI upgrade action.
+- Use the `Windows` menu to show or hide dockable panels such as `Topic list`, `Main view`, `Properties`, and `Output`.
+- Move, float, tab, or close GUI panels using normal Qt dock-window behavior. All panels open by default and can be restored from the `Windows` menu.
+- On first GUI startup, choose whether to check for updates, auto-update from GitHub releases, or turn the startup update checker off.
+- Show a folded-by-default topic tree with category and message count.
+- Drag topics from the topic tree into the main view.
+- Scrub a timeline and preview assigned topics near the current timestamp.
+- Change playback speed with the timeline rate selector: `0.25x`, `0.5x`, `1x`, `2x`, or `4x`.
+- Preview image topics, point cloud topics, and scalar/custom message summaries.
+- Render an image topic before playback, then use Play/Pause to play from the rendered preview cache instead of decoding every frame on the timer.
+- Show GUI progress while opening bags, rendering image playback caches, and exporting topics.
+- Right-click a view to split horizontally or vertically, up to a 4x4 grid.
+- Each view tile has a title and a slim top bar for rendering, maximizing/restoring, deleting, or opening the view as a pop-out window.
+- Save non-destructive display/export settings to `ros2unbag_session.json`.
+
+Install GUI dependencies with:
+
+```powershell
+py -m pip install -e .[gui]
+```
+
+Run:
+
+```powershell
+ros2unbag gui .\my_bag
+```
+
+From inside the interactive shell:
+
+```text
+ros2unbag> gui
+ros2unbag> gui .\my_bag
+```
+
+The GUI does not rewrite bag files. It stores view settings such as visibility, color, opacity, point size, decimation, sync offset, and export preference in the sidecar JSON file.
+
+The GUI preview path is optimized for responsive scrubbing: slider updates are debounced for manual scrubbing, but playback updates visible panes immediately on each timer tick. For image playback, the view renders display-sized frames once and plays from that cache. Dock panels and topic columns are resized after import and when panels are shown/hidden. Lossless exports still use the dedicated exporter commands and are not affected by preview scaling.
 
 ## Project Structure
 
@@ -342,19 +447,22 @@ Planned:
 `- tests/
 ```
 
-The source package contains `cli/`, `core/`, `exporters/`, and an intentionally reserved `gui/` package for the future PySide6 timeline viewer.
+The source package contains `cli/`, `core/`, `exporters/`, and `gui/` packages. The GUI package contains the optional PySide6 timeline viewer and its renderer adapters.
 
 ## Known Limitations
 
 - This is an offline bag reader, not a live subscriber, recorder, or `ros2 bag play` wrapper.
 - A bag usually does not identify exact publisher/subscriber node graph relationships. The tool may infer likely processing categories from names, types, and timestamps, but it must not claim exact graph relationships unless graph metadata was separately recorded.
 - The SQLite fallback backend does not deserialize messages. Use the `rosbags` backend for decoded CSV, JSONL, image, and video exports.
-- Image decoding currently supports `rgb8`, `bgr8`, `rgba8`, `bgra8`, `mono8`, and `8UC1` for `sensor_msgs/msg/Image`. Unsupported encodings are skipped with warnings instead of stopping the export.
+- Image decoding currently supports `rgb8`, `bgr8`, `rgba8`, `bgra8`, `mono8`, `8UC1`, `mono16`, `16UC1`, and `32FC1` for `sensor_msgs/msg/Image`. Unsupported encodings are skipped with warnings instead of stopping the export.
 - Compressed image decoding relies on OpenCV `cv2.imdecode`.
 - MP4 writing relies on OpenCV `cv2.VideoWriter`; codec support can vary by Python/OpenCV/platform combination.
 - MP4 export currently supports constant-FPS output only. Use the generated timestamp CSV for true ROS timing.
 - SQLite export stores flattened message rows. Complex nested values that do not map cleanly to scalar columns are stored as JSON strings.
-- The GUI timeline viewer is not implemented yet.
+- The GUI timeline viewer is intentionally view-only and early-stage. It is not a full RViz2 replacement and does not provide live ROS node graph introspection.
+- GUI image playback uses a rendered preview cache. This improves Play/Pause responsiveness, but very large or high-resolution image topics can still use significant memory when rendered.
+- GUI splitting is currently limited to a 4x4 view grid.
+- The optional 3D point cloud renderer depends on VisPy/OpenGL support. If the renderer cannot initialize, the GUI falls back to non-3D preview text instead of failing the whole viewer.
 - Progress totals depend on message counts reported by the bag backend. If a backend cannot provide a count, `ros2unbag` shows an indeterminate activity display instead of a percentage.
 - Custom message support depends on what `rosbags` can deserialize from bag metadata. A future CLI option may accept custom `.msg` or `.idl` definition paths.
 - ROS bags may contain camera images, sensor recordings, paths, or other private lab data. Review exported files before sharing them.

@@ -39,6 +39,7 @@ COMMANDS = [
     "export-all",
     "inspect",
     "dur",
+    "gui",
     "upgrade",
     "help",
     "clear",
@@ -55,6 +56,7 @@ OPTIONS_BY_COMMAND = {
     "export-all": ["--out", "-o"],
     "inspect": ["--time", "--dur", "--absolute-ns"],
     "dur": [],
+    "gui": [],
     "upgrade": ["--source", "--ref", "--yes", "-y", "--print-only"],
 }
 
@@ -165,6 +167,9 @@ def dispatch_repl_line(session: Session, line: str) -> bool:
             return False
         if command == "dur":
             _handle_duration(session, args)
+            return False
+        if command == "gui":
+            _handle_gui(session, args)
             return False
         if command == "upgrade":
             _handle_upgrade(args)
@@ -421,6 +426,16 @@ def _handle_duration(session: Session, args: list[str]) -> None:
     render_topic_duration(session.topic_duration(positionals[0], progress_factory=progress_task))
 
 
+def _handle_gui(session: Session, args: list[str]) -> None:
+    positionals, _options = _parse_args(args)
+    bag_path = Path(positionals[0]) if positionals else session.bag_path
+    try:
+        from ros2unbag.gui.timeline_viewer import run_gui
+    except RuntimeError as exc:
+        raise RuntimeError(str(exc)) from exc
+    run_gui(bag_path)
+
+
 def _handle_upgrade(args: list[str]) -> None:
     _positionals, options = _parse_args(args)
     source = _option(options, "--source") or "github"
@@ -450,9 +465,10 @@ def render_repl_help() -> None:
     console.print("  topics -s")
     console.print("  dur TOPIC")
     console.print("  inspect --time SECONDS [--dur TOPIC] [--absolute-ns]")
-    console.print("  export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw --out OUT_DIR [--fps FPS]")
+    console.print("  export TOPIC --format csv|parquet|sqlite|png|jpg|mp4|jsonl|raw|npz|pcd|ply --out OUT_DIR [--fps FPS]")
     console.print("  export-select")
     console.print("  export-all --out OUT_DIR")
+    console.print("  gui [BAG_PATH]")
     console.print("  upgrade [--source github|pypi] [--ref REF] [--yes]")
     console.print("  close")
     console.print("  clear")
@@ -590,6 +606,10 @@ class Ros2UnbagCompleter(Completer):
         if command == "dur":
             if not positionals:
                 yield from _complete_values(self._topic_names(), current)
+            return
+        if command == "gui":
+            if not positionals:
+                yield from _complete_paths(current)
             return
         if command == "upgrade":
             yield from _complete_option_values(_available_options(command, args), current)

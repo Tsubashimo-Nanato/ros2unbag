@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import struct
 import unittest
 
 from ros2unbag.core.decoder import decode_sensor_image, flatten_message, message_to_plain
@@ -60,6 +61,34 @@ class DecoderTests(unittest.TestCase):
         frame = decode_sensor_image(image)
 
         self.assertEqual(frame.array.tolist(), [[[0, 0, 255]]])
+
+    def test_decode_16uc1_sensor_image(self) -> None:
+        image = FakeImage(
+            height=1,
+            width=2,
+            encoding="16UC1",
+            step=4,
+            data=struct.pack("<HH", 100, 200),
+        )
+
+        frame = decode_sensor_image(image)
+
+        self.assertEqual(str(frame.array.dtype), "uint16")
+        self.assertEqual(frame.array.tolist(), [[100, 200]])
+
+    def test_decode_32fc1_sensor_image(self) -> None:
+        image = FakeImage(
+            height=1,
+            width=2,
+            encoding="32FC1",
+            step=8,
+            data=struct.pack("<ff", 1.5, 2.5),
+        )
+
+        frame = decode_sensor_image(image)
+
+        self.assertEqual(str(frame.array.dtype), "float32")
+        self.assertEqual(frame.array.tolist(), [[1.5, 2.5]])
 
 
 if __name__ == "__main__":

@@ -45,6 +45,8 @@ UNINSTALL_PACKAGES = (
     "PySide6-Addons",
     "PySide6-Essentials",
     "shiboken6",
+    "vispy",
+    "PyOpenGL",
     "apsw",
     "lz4",
     "ruamel.yaml",
@@ -150,7 +152,11 @@ def export(
     topic: Annotated[str, typer.Option("--topic", "-t", help="Topic to export.")],
     export_format: Annotated[
         str,
-        typer.Option("--format", "-f", help="csv, jsonl, raw, png, jpg, mp4, parquet, sqlite."),
+        typer.Option(
+            "--format",
+            "-f",
+            help="csv, jsonl, raw, png, jpg, mp4, parquet, sqlite, npz, pcd, ply.",
+        ),
     ],
     out: Annotated[Path, typer.Option("--out", "-o", help="Output directory.")],
     fps: Annotated[
@@ -304,6 +310,25 @@ def manifest_command(
 def formats_command() -> None:
     """List known export formats."""
     console.print(", ".join(sorted(ALL_EXPORTS)))
+
+
+@app.command("gui")
+def gui_command(
+    bag_path: Annotated[
+        Path | None,
+        typer.Argument(help="Optional bag folder, .db3 file, or supported bag file."),
+    ] = None,
+) -> None:
+    """Start the optional PySide6 offline timeline viewer."""
+    try:
+        from ros2unbag.gui.timeline_viewer import run_gui
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    try:
+        run_gui(bag_path)
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @app.command("uninstall")
