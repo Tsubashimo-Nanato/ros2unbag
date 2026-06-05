@@ -2,6 +2,15 @@
 
 All notable changes for this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Fixed GUI startup without an opened bag by making dock autosize tolerate an empty topic list.
+- Moved GUI update checks and upgrade execution onto a background worker so network and pip work no longer run directly on the Qt UI thread.
+- Bounded GUI image playback rendering to a fixed-size frame window instead of caching an entire image topic in memory.
+- Reduced normal point cloud preview and PCD/PLY export overhead by using validated `PointCloud2` metadata for point counts instead of always doing a separate count pass.
+
 ## [1.5.1] - 2026-05-24
 
 ### Added

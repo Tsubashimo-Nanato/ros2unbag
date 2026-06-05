@@ -11,6 +11,7 @@ from ros2unbag.core.point_cloud import (
     expanded_point_row,
     iter_point_cloud_rows,
     point_cloud_field_specs,
+    point_cloud_point_count,
     point_field_pcd_size,
     point_field_pcd_type,
     point_field_ply_type,
@@ -164,7 +165,7 @@ def _expanded_values(specs: Iterable[object], value_for_spec: Callable[[object],
 
 
 def _count_rows(message: object) -> int:
-    return sum(1 for _row in iter_point_cloud_rows(message))
+    return point_cloud_point_count(message)
 
 
 def _format_value(value: object) -> str:

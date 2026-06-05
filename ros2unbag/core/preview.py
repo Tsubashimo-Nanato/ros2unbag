@@ -17,7 +17,12 @@ from ros2unbag.core.decoder import (
 )
 from ros2unbag.core.jobs import CancellationToken
 from ros2unbag.core.models import MessageRecord
-from ros2unbag.core.point_cloud import expanded_point_field_names, expanded_point_row, iter_point_cloud_rows
+from ros2unbag.core.point_cloud import (
+    expanded_point_field_names,
+    expanded_point_row,
+    iter_point_cloud_rows,
+    point_cloud_point_count,
+)
 from ros2unbag.core.session import Session
 
 
@@ -181,7 +186,7 @@ class PreviewService:
         if record is None or record.decoded is None:
             return None
         fields = expanded_point_field_names(record.decoded)
-        original_count = sum(1 for _row in iter_point_cloud_rows(record.decoded))
+        original_count = point_cloud_point_count(record.decoded)
         stride = max(1, math.ceil(original_count / max_points)) if max_points > 0 else 1
         xyz: list[list[float]] = []
         color_values: list[float] = []

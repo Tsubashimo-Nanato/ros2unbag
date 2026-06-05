@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import importlib.util
 import os
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
+import numpy as np
+
+from ros2unbag.core.models import MessageRecord
 from ros2unbag.core.models import TopicInfo
-from ros2unbag.gui.timeline_viewer import TimelineViewer
+from ros2unbag.gui.timeline_viewer import MAX_RENDERED_PLAYBACK_FRAMES, TimelineViewer
 
 
 if importlib.util.find_spec("PySide6") is None:
@@ -16,6 +21,25 @@ from PySide6 import QtWidgets  # noqa: E402
 
 
 class DummyReader:
+    def close(self) -> None:
+        return None
+
+
+class ImageReader:
+    def __init__(self, count: int) -> None:
+        self.count = count
+
+    def iter_messages(self, topics: list[str] | None = None) -> object:
+        topic = (topics or ["/camera"])[0]
+        for index in range(self.count):
+            yield MessageRecord(
+                topic=topic,
+                timestamp_ns=index,
+                msgtype="sensor_msgs/msg/Image",
+                raw=b"raw",
+                decoded=object(),
+            )
+
     def close(self) -> None:
         return None
 
@@ -70,6 +94,17 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
+    def test_show_without_open_bag_does_not_crash_autosize(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer._update_settings.setValue("updates/mode", "off")
+            viewer.show()
+            for _index in range(10):
+                self.app.processEvents()
+            self.assertIsNone(viewer.session.reader)
+        finally:
+            viewer.window.close()
+
     def test_topic_tree_width_uses_topic_data(self) -> None:
         viewer = TimelineViewer()
         try:
@@ -114,6 +149,51 @@ class GuiTimelineViewerTests(unittest.TestCase):
             viewer._set_theme("light")
             self.assertEqual(viewer._theme, "light")
             self.assertIn("#edf0f3", viewer.window.styleSheet())
+        finally:
+            viewer.window.close()
+
+    def test_update_check_starts_background_job(self) -> None:
+        viewer = TimelineViewer()
+        calls = []
+        try:
+            def fake_background(**kwargs: object) -> None:
+                calls.append(kwargs)
+
+            viewer._run_background = fake_background  # type: ignore[method-assign]
+            viewer._start_update_check(show_no_update=False)
+
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0]["title"], "Checking for updates")
+        finally:
+            viewer.window.close()
+
+    def test_image_render_cache_is_bounded(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topic = "/camera"
+            topic_info = TopicInfo(
+                name=topic,
+                msgtype="sensor_msgs/msg/Image",
+                category="image",
+                message_count=MAX_RENDERED_PLAYBACK_FRAMES + 25,
+            )
+            viewer.session.reader = ImageReader(MAX_RENDERED_PLAYBACK_FRAMES + 25)  # type: ignore[assignment]
+            viewer.session.topics = [topic_info]
+            viewer._bag_start_ns = 0
+            pane = viewer._panes[0]
+            pane.set_topic(topic, topic_info)
+            frame = SimpleNamespace(
+                array=np.zeros((4, 4, 3), dtype=np.uint8),
+                width=4,
+                height=4,
+                encoding="bgr8",
+                warnings=[],
+            )
+
+            with patch("ros2unbag.gui.timeline_viewer._decode_record_frame", return_value=frame):
+                self.assertTrue(pane.ensure_rendered_for_playback())
+
+            self.assertEqual(len(pane.rendered_frames), MAX_RENDERED_PLAYBACK_FRAMES)
         finally:
             viewer.window.close()
 

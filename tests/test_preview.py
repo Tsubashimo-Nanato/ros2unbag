@@ -4,9 +4,11 @@ import dataclasses
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ros2unbag.core.jobs import CancelledError, CancellationToken
 from ros2unbag.core.models import MessageRecord, TopicInfo
+from ros2unbag.core.point_cloud import iter_point_cloud_rows
 from ros2unbag.core.preview import (
     PreviewService,
     PreviewSessionSettings,
@@ -20,6 +22,25 @@ from ros2unbag.core.session import Session
 @dataclasses.dataclass
 class FakeScalar:
     value: float
+
+
+@dataclasses.dataclass
+class FakePointField:
+    name: str
+    offset: int
+    datatype: int
+    count: int = 1
+
+
+@dataclasses.dataclass
+class FakePointCloud2:
+    width: int
+    height: int
+    fields: list[FakePointField]
+    is_bigendian: bool
+    point_step: int
+    row_step: int
+    data: bytes
 
 
 class FakeReader:
@@ -71,6 +92,47 @@ class PreviewTests(unittest.TestCase):
 
         self.assertEqual(series.timestamps_ns, [100, 200])
         self.assertEqual(series.values, [1.0, 2.0])
+
+    def test_point_cloud_preview_uses_single_row_pass_when_metadata_is_valid(self) -> None:
+        import struct
+
+        cloud = FakePointCloud2(
+            width=2,
+            height=1,
+            fields=[
+                FakePointField("x", 0, 7),
+                FakePointField("y", 4, 7),
+                FakePointField("z", 8, 7),
+            ],
+            is_bigendian=False,
+            point_step=12,
+            row_step=24,
+            data=struct.pack("<ffffff", 1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+        )
+        session = Session()
+        reader = FakeReader([
+            MessageRecord(
+                "/points",
+                100,
+                "sensor_msgs/msg/PointCloud2",
+                decoded=cloud,
+            )
+        ])
+        session.reader = reader  # type: ignore[assignment]
+        session.topics = [
+            TopicInfo(
+                name="/points",
+                msgtype="sensor_msgs/msg/PointCloud2",
+                category="point_cloud",
+            )
+        ]
+        preview = PreviewService(session)
+
+        with patch("ros2unbag.core.preview.iter_point_cloud_rows", wraps=iter_point_cloud_rows) as rows:
+            cloud_preview = preview.point_cloud_preview("/points", 100, max_points=1)
+
+        self.assertIsNotNone(cloud_preview)
+        self.assertEqual(rows.call_count, 1)
 
     def test_display_settings_round_trip(self) -> None:
         settings = PreviewSessionSettings(

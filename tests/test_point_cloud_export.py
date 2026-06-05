@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from ros2unbag.core.models import MessageRecord
-from ros2unbag.core.point_cloud import point_cloud_rows
+from ros2unbag.core.point_cloud import point_cloud_declared_point_count, point_cloud_rows
 from ros2unbag.core.session import _coverage_warnings
 from ros2unbag.exporters.csv_exporter import export_topic_csv
 from ros2unbag.exporters.npz_exporter import export_topic_npz
@@ -80,6 +80,15 @@ class PointCloudExportTests(unittest.TestCase):
 
         self.assertEqual([row["x"] for row in rows], [1.0, 2.0])
         self.assertEqual([row["cloud_row"] for row in rows], [0, 1])
+
+    def test_declared_point_count_uses_valid_width_height_metadata(self) -> None:
+        self.assertEqual(point_cloud_declared_point_count(_fake_cloud()), 2)
+
+    def test_declared_point_count_rejects_truncated_payload(self) -> None:
+        cloud = _fake_cloud()
+        cloud.data = cloud.data[:12]
+
+        self.assertIsNone(point_cloud_declared_point_count(cloud))
 
     def test_point_cloud_field_does_not_read_across_point_boundary(self) -> None:
         fields = [FakePointField("bad", 10, 7)]

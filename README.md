@@ -393,7 +393,7 @@ The optional GUI is a Windows-oriented, offline, view-only RViz2-like shell:
 - Open a bag without playing it or subscribing to ROS.
 - Use `File > Import bag...` to browse directly for a bag folder, or drag and drop a bag folder or supported bag file onto the window to open it.
 - Use `File > Export...` to export selected topics through the same compatibility rules used by the CLI.
-- Use `File > Version...` to view the installed version, local changelog, GitHub update status, release notes for newer versions, and the GUI upgrade action.
+- Use `File > Version...` to view the installed version, local changelog, GitHub update status, release notes for newer versions, and the GUI upgrade action. Update checks and upgrades run as GUI background jobs.
 - Use the Dark mode switch in `File > Version...` to choose light or dark GUI colors.
 - Use the `Windows` menu to show or hide dockable panels such as `Topic list`, `Main view`, `Properties`, and `Output`.
 - Move, float, tab, or close GUI panels using normal Qt dock-window behavior. All panels open by default and can be restored from the `Windows` menu.
@@ -403,7 +403,7 @@ The optional GUI is a Windows-oriented, offline, view-only RViz2-like shell:
 - Scrub a timeline and preview assigned topics near the current timestamp.
 - Change playback speed with the timeline rate selector: `0.25x`, `0.5x`, `1x`, `2x`, or `4x`.
 - Preview image topics, point cloud topics, and scalar/custom message summaries.
-- Render an image topic before playback, then use Play/Pause to play from the rendered preview cache instead of decoding every frame on the timer.
+- Render an image topic before playback, then use Play/Pause to play from a bounded rendered preview cache instead of decoding every frame on the timer.
 - Show GUI progress while opening bags, rendering image playback caches, and exporting topics.
 - Resize dock panels and topic-list columns after import/show/hide using bounded, eased resize transitions.
 - Right-click a view to split horizontally or vertically, up to a 4x4 grid.
@@ -431,7 +431,7 @@ ros2unbag> gui .\my_bag
 
 The GUI does not rewrite bag files. It stores view settings such as visibility, color, opacity, point size, decimation, sync offset, and export preference in the sidecar JSON file.
 
-The GUI preview path is optimized for responsive scrubbing: slider updates are debounced for manual scrubbing, but playback updates visible panes immediately on each timer tick. For image playback, the view renders display-sized frames once and plays from that cache. Dock panels and topic columns are resized after import and when panels are shown/hidden; the unused center spacer is collapsed so the main view can use the available workspace. The main view, topic list, properties panel, output panel, dialogs, and controls follow the selected light or dark theme. Lossless exports still use the dedicated exporter commands and are not affected by preview scaling.
+The GUI preview path is optimized for responsive scrubbing: slider updates are debounced for manual scrubbing, but playback updates visible panes immediately on each timer tick. For image playback, the view renders display-sized frames into a bounded playback window and refreshes that window as playback advances, avoiding an unbounded full-topic frame cache. Dock panels and topic columns are resized after import and when panels are shown/hidden; the unused center spacer is collapsed so the main view can use the available workspace. The main view, topic list, properties panel, output panel, dialogs, and controls follow the selected light or dark theme. Lossless exports still use the dedicated exporter commands and are not affected by preview scaling.
 
 ## Project Structure
 
@@ -462,7 +462,7 @@ The source package contains `cli/`, `core/`, `exporters/`, and `gui/` packages. 
 - MP4 export currently supports constant-FPS output only. Use the generated timestamp CSV for true ROS timing.
 - SQLite export stores flattened message rows. Complex nested values that do not map cleanly to scalar columns are stored as JSON strings.
 - The GUI timeline viewer is intentionally view-only and early-stage. It is not a full RViz2 replacement and does not provide live ROS node graph introspection.
-- GUI image playback uses a rendered preview cache. This improves Play/Pause responsiveness, but very large or high-resolution image topics can still use significant memory when rendered.
+- GUI image playback uses a bounded rendered preview cache. This improves Play/Pause responsiveness while limiting memory growth, but very large or high-resolution topics can still pause briefly when the playback window refreshes.
 - GUI splitting is currently limited to a 4x4 view grid.
 - The optional 3D point cloud renderer depends on VisPy/OpenGL support. If the renderer cannot initialize, the GUI falls back to non-3D preview text instead of failing the whole viewer.
 - Progress totals depend on message counts reported by the bag backend. If a backend cannot provide a count, `ros2unbag` shows an indeterminate activity display instead of a percentage.

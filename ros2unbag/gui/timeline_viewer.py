@@ -3,6 +3,8 @@ from __future__ import annotations
 from bisect import bisect_left
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Empty, Queue
+from threading import Thread
 from time import perf_counter
 from typing import Any
 
@@ -22,6 +24,7 @@ from ros2unbag.gui.renderers import create_point_cloud_renderer
 
 TOPIC_MIME = "application/x-ros2unbag-topic"
 IMAGE_CATEGORIES = {"image", "compressed_image", "mask_candidate"}
+MAX_RENDERED_PLAYBACK_FRAMES = 300
 
 
 @dataclass(slots=True)
@@ -66,6 +69,7 @@ class TimelineViewer:
         self._theme = _normalize_theme(stored_theme) if stored_theme else _system_theme(self.QtWidgets)
         self._dock_resize_generations = {"horizontal": 0, "vertical": 0}
         self._autosize_pending = False
+        self._background_jobs: list[tuple[Any, Any, Any, Any]] = []
 
         self.window = _create_drop_window(self.QtWidgets, self.QtCore, self.open_bag)
         self.window.setWindowTitle("ros2unbag Timeline Viewer")
@@ -517,11 +521,12 @@ class TimelineViewer:
     def _preferred_topic_column_widths(self) -> list[int]:
         if not hasattr(self, "topic_tree"):
             return []
+        topics = self._topic_snapshot()
         metrics = self.topic_tree.fontMetrics()
         topic_width = metrics.horizontalAdvance("Topic") + 36
         category_width = metrics.horizontalAdvance("Category") + 28
         count_width = metrics.horizontalAdvance("Count") + 28
-        for topic in self.session.list_topics():
+        for topic in topics:
             parts = [part for part in topic.name.split("/") if part]
             if not parts:
                 parts = [topic.name]
@@ -534,6 +539,14 @@ class TimelineViewer:
         category_width = max(86, min(120, category_width))
         count_width = max(68, min(76, count_width))
         return [topic_width, category_width, count_width]
+
+    def _topic_snapshot(self) -> list[TopicInfo]:
+        if self.session.reader is None:
+            return list(self.session.topics)
+        try:
+            return self.session.list_topics()
+        except RuntimeError:
+            return list(self.session.topics)
 
     def _animate_resize_docks(self, docks: list[Any], targets: list[int], orientation: Any) -> None:
         if not docks:
@@ -569,9 +582,10 @@ class TimelineViewer:
     def _populate_topics(self) -> None:
         self.topic_tree.clear()
         self._topic_by_item.clear()
-        self._topic_info_by_name = {topic.name: topic for topic in self.session.list_topics()}
+        topics = self._topic_snapshot()
+        self._topic_info_by_name = {topic.name: topic for topic in topics}
         nodes: dict[tuple[str, ...], Any] = {}
-        for topic in self.session.list_topics():
+        for topic in topics:
             parts = [part for part in topic.name.split("/") if part]
             parent = None
             for depth, part in enumerate(parts):
@@ -805,13 +819,16 @@ class TimelineViewer:
             self._update_settings.setValue("updates/mode", mode)
         if mode == "off":
             return
-        info = self._check_for_updates(show_no_update=False)
-        if info is None or not info.update_available:
-            return
-        if mode == "auto":
-            self._run_upgrade_from_gui(info, automatic=True)
-        else:
-            self._show_version_dialog(info)
+
+        def handle_result(info: UpdateInfo | None) -> None:
+            if info is None or not info.update_available:
+                return
+            if mode == "auto":
+                self._run_upgrade_from_gui(info, automatic=True)
+            else:
+                self._show_version_dialog(info)
+
+        self._start_update_check(show_no_update=False, on_result=handle_result)
 
     def _ask_update_preference(self) -> str:
         box = self.QtWidgets.QMessageBox(self.window)
@@ -910,7 +927,17 @@ class TimelineViewer:
                 )
 
         def check_now() -> None:
-            apply_info(self._check_for_updates(show_no_update=True, parent=dialog))
+            check_button.setEnabled(False)
+
+            def finish(info: UpdateInfo | None) -> None:
+                apply_info(info)
+                check_button.setEnabled(True)
+
+            self._start_update_check(
+                show_no_update=True,
+                parent=dialog,
+                on_result=finish,
+            )
 
         def upgrade_now() -> None:
             if self._latest_update_info is not None:
@@ -922,41 +949,42 @@ class TimelineViewer:
         apply_info(update_info)
         dialog.exec()
 
-    def _check_for_updates(
+    def _start_update_check(
         self,
         *,
         show_no_update: bool,
         parent: Any | None = None,
-    ) -> UpdateInfo | None:
-        progress = self.QtWidgets.QProgressDialog(
-            "Checking for ros2unbag updates...",
-            None,
-            0,
-            0,
-            parent or self.window,
-        )
-        progress.setWindowModality(self.QtCore.Qt.WindowModality.WindowModal)
-        progress.show()
-        self.QtWidgets.QApplication.processEvents()
-        try:
-            info = check_for_update()
-        finally:
-            progress.close()
-        self._latest_update_info = info
-        if info.error:
+        on_result: Any | None = None,
+    ) -> None:
+        def handle_success(info: UpdateInfo) -> None:
+            self._latest_update_info = info
+            if info.error:
+                if show_no_update:
+                    self._show_warning(f"Update check failed: {info.error}")
+            elif not info.update_available and show_no_update:
+                latest = info.latest_ref or info.latest_version or "unknown"
+                self.QtWidgets.QMessageBox.information(
+                    parent or self.window,
+                    "ros2unbag update",
+                    f"No newer version found.\nLatest: {latest}\nInstalled: {info.current_version}",
+                )
+            if on_result is not None:
+                on_result(info)
+
+        def handle_error(message: str) -> None:
             if show_no_update:
-                self._show_warning(f"Update check failed: {info.error}")
-            return info
-        if info.update_available:
-            return info
-        if show_no_update:
-            latest = info.latest_ref or info.latest_version or "unknown"
-            self.QtWidgets.QMessageBox.information(
-                parent or self.window,
-                "ros2unbag update",
-                f"No newer version found.\nLatest: {latest}\nInstalled: {info.current_version}",
-            )
-        return info
+                self._show_warning(f"Update check failed: {message}")
+            if on_result is not None:
+                on_result(None)
+
+        self._run_background(
+            title="Checking for updates",
+            label="Checking for ros2unbag updates...",
+            work=check_for_update,
+            on_success=handle_success,
+            on_error=handle_error,
+            parent=parent,
+        )
 
     def _run_upgrade_from_gui(
         self,
@@ -979,27 +1007,23 @@ class TimelineViewer:
             )
             if answer != self.QtWidgets.QMessageBox.StandardButton.Yes:
                 return
-        progress = self.QtWidgets.QProgressDialog(
-            f"Upgrading ros2unbag to {info.latest_ref}...",
-            None,
-            0,
-            0,
-            parent or self.window,
-        )
-        progress.setWindowModality(self.QtCore.Qt.WindowModality.WindowModal)
-        progress.show()
-        self.QtWidgets.QApplication.processEvents()
-        try:
+        def work() -> None:
             run_upgrade(build_upgrade_plan(ref=info.latest_ref))
-        except Exception as exc:
-            self._show_warning(f"Upgrade failed: {exc}")
-            return
-        finally:
-            progress.close()
-        self.QtWidgets.QMessageBox.information(
-            parent or self.window,
-            "Upgrade complete",
-            "Upgrade finished. Restart ros2unbag to use the updated code.",
+
+        def finish(_result: object) -> None:
+            self.QtWidgets.QMessageBox.information(
+                parent or self.window,
+                "Upgrade complete",
+                "Upgrade finished. Restart ros2unbag to use the updated code.",
+            )
+
+        self._run_background(
+            title="Upgrade ros2unbag",
+            label=f"Upgrading ros2unbag to {info.latest_ref}...",
+            work=work,
+            on_success=finish,
+            on_error=lambda message: self._show_warning(f"Upgrade failed: {message}"),
+            parent=parent,
         )
 
     def _import_bag(self) -> None:
@@ -1238,6 +1262,65 @@ class TimelineViewer:
     def _log(self, message: str) -> None:
         self.log_text.append(message)
 
+    def _run_background(
+        self,
+        *,
+        title: str,
+        label: str,
+        work: Any,
+        on_success: Any,
+        on_error: Any | None = None,
+        parent: Any | None = None,
+    ) -> None:
+        progress = self.QtWidgets.QProgressDialog(
+            label,
+            None,
+            0,
+            0,
+            parent or self.window,
+        )
+        progress.setWindowTitle(title)
+        progress.setWindowModality(self.QtCore.Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+
+        results: Queue[tuple[bool, object]] = Queue(maxsize=1)
+
+        def target() -> None:
+            try:
+                results.put((True, work()))
+            except Exception as exc:
+                results.put((False, str(exc)))
+
+        thread = Thread(target=target, daemon=True)
+        timer = self.QtCore.QTimer(parent or self.window)
+        timer.setInterval(50)
+        job = (thread, timer, progress, results)
+        self._background_jobs.append(job)
+
+        def cleanup() -> None:
+            timer.stop()
+            progress.close()
+            if job in self._background_jobs:
+                self._background_jobs.remove(job)
+
+        def poll() -> None:
+            try:
+                ok, payload = results.get_nowait()
+            except Empty:
+                return
+            cleanup()
+            if ok:
+                on_success(payload)
+            elif on_error is not None:
+                on_error(str(payload))
+            else:
+                self._show_warning(str(payload))
+
+        timer.timeout.connect(poll)
+        progress.show()
+        timer.start()
+        thread.start()
+
 
 def run_gui(bag_path: str | Path | None = None) -> None:
     _QtCore, _QtGui, QtWidgets = _require_pyside6()
@@ -1423,8 +1506,20 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             if not self.is_image_topic():
                 self.owner._show_warning("Only image-compatible topics can be rendered for playback.")
                 return False
+            return self._render_playback_window(self.owner._current_timestamp_ns())
+
+        def _render_playback_window(self, start_timestamp_ns: int | None = None) -> bool:
+            if self.topic is None or self.topic_info is None:
+                return False
             current_size = _usable_label_size(self.image_label)
-            if self.rendered_frames and self.rendered_size == current_size:
+            if (
+                self.rendered_frames
+                and self.rendered_size == current_size
+                and start_timestamp_ns is not None
+                and self.rendered_timestamps[0] <= start_timestamp_ns <= self.rendered_timestamps[-1]
+            ):
+                return True
+            if self.rendered_frames and self.rendered_size == current_size and start_timestamp_ns is None:
                 return True
 
             reader = self.owner.session.reader
@@ -1433,7 +1528,10 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.rendered_frames.clear()
             self.rendered_timestamps.clear()
             self.rendered_size = current_size
-            total = self.topic_info.message_count if self.topic_info.message_count > 0 else 0
+            total = min(
+                self.topic_info.message_count,
+                MAX_RENDERED_PLAYBACK_FRAMES,
+            ) if self.topic_info.message_count > 0 else MAX_RENDERED_PLAYBACK_FRAMES
             self.owner._start_progress(f"Rendering {self.topic}", total if total > 0 else None)
             progress = QtWidgets.QProgressDialog(
                 f"Rendering {self.topic} for playback...",
@@ -1446,7 +1544,11 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                 progress.setRange(0, 0)
             progress.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
             count = 0
+            skipped_before_window = 0
             for record in reader.iter_messages(topics=[self.topic]):
+                if start_timestamp_ns is not None and record.timestamp_ns < start_timestamp_ns:
+                    skipped_before_window += 1
+                    continue
                 if progress.wasCanceled():
                     self.rendered_frames.clear()
                     self.rendered_timestamps.clear()
@@ -1483,12 +1585,20 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                         count,
                         total if total > 0 else None,
                     )
-            progress.setValue(total if total > 0 else count)
+                if count >= MAX_RENDERED_PLAYBACK_FRAMES:
+                    break
+            progress.setValue(count if total > 0 else 0)
             if not self.rendered_frames:
                 self.owner._finish_progress("Ready")
                 self.owner._show_warning(f"No frames could be rendered for {self.topic}.")
                 return False
-            self.owner._log(f"Rendered {len(self.rendered_frames)} frame(s) for {self.topic}.")
+            if self.topic_info.message_count > len(self.rendered_frames) + skipped_before_window:
+                self.owner._log(
+                    f"Rendered {len(self.rendered_frames)} frame(s) for {self.topic} "
+                    f"starting near {self.rendered_timestamps[0]}; playback cache is bounded."
+                )
+            else:
+                self.owner._log(f"Rendered {len(self.rendered_frames)} frame(s) for {self.topic}.")
             self.show_at_timestamp(self.owner._current_timestamp_ns())
             self.owner._finish_progress()
             return True
@@ -1533,6 +1643,16 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                 self.owner._log(f"Preview error for {self.topic}: {exc}")
 
         def _show_rendered_frame(self, timestamp_ns: int) -> None:
+            if (
+                self.rendered_timestamps
+                and len(self.rendered_frames) >= MAX_RENDERED_PLAYBACK_FRAMES
+                and (
+                    timestamp_ns < self.rendered_timestamps[0]
+                    or timestamp_ns > self.rendered_timestamps[-1]
+                )
+            ):
+                if not self._render_playback_window(timestamp_ns):
+                    return
             index = bisect_left(self.rendered_timestamps, timestamp_ns)
             if index <= 0:
                 selected = 0

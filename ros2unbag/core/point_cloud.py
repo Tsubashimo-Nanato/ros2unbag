@@ -110,13 +110,26 @@ def point_cloud_field_specs(message: object) -> list[PointCloudFieldSpec]:
 
 
 def point_cloud_point_count(message: object) -> int:
+    declared_count = point_cloud_declared_point_count(message)
+    if declared_count is not None:
+        return declared_count
+    return sum(1 for _row in iter_point_cloud_rows(message))
+
+
+def point_cloud_declared_point_count(message: object) -> int | None:
+    """Return a metadata-derived point count when the payload length supports it."""
     width = int(getattr(message, "width", 0) or 0)
     height = int(getattr(message, "height", 0) or 0)
-    if width > 0 and height > 0:
-        return width * height
     data = _data_bytes(getattr(message, "data", b""))
     point_step = int(getattr(message, "point_step", 0) or 0)
-    return 0 if point_step <= 0 else len(data) // point_step
+    if point_step <= 0:
+        return 0 if not data else None
+    if width > 0 and height > 0:
+        row_step = int(getattr(message, "row_step", 0) or 0)
+        row_stride = row_step if row_step >= width * point_step else width * point_step
+        required_length = ((height - 1) * row_stride) + (width * point_step)
+        return width * height if len(data) >= required_length else None
+    return len(data) // point_step
 
 
 def expanded_point_field_names(message: object) -> list[str]:
