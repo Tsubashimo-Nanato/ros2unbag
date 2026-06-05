@@ -8,11 +8,11 @@ This tool is oriented toward researchers who prefer working in Windows rather th
 
 ## Status
 
-Current release: `v1.5.1`
+Current release: `v1.5.2`
 
 Release preparation date: 2026-05-24
 
-This project has been publicly released and is currently maintained at version `1.5.1`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
+This project has been publicly released and is currently maintained at version `1.5.2`. The core workflow is usable in real offline bag-inspection and export workflows, while some features remain incomplete and edge cases may still exist.
 
 Developer and maintainer: Owen Zi-Wen ZHOU. Reviewed and released by Owen Zi-Wen ZHOU. Issues, bug reports, and improvement suggestions are welcome.
 
@@ -89,7 +89,7 @@ ros2unbag upgrade --print-only
 Upgrade from a specific GitHub tag, branch, or commit:
 
 ```powershell
-ros2unbag upgrade --ref v1.5.1 --yes
+ros2unbag upgrade --ref v1.5.2 --yes
 ```
 
 The running shell process cannot reload upgraded Python code in place. Restart `ros2unbag` after a successful upgrade.
@@ -292,7 +292,7 @@ Upgrade the installed package:
 
 ```powershell
 ros2unbag upgrade --yes
-ros2unbag upgrade --ref v1.5.1 --yes
+ros2unbag upgrade --ref v1.5.2 --yes
 ros2unbag upgrade --source pypi --yes
 ```
 
