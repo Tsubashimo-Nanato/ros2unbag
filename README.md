@@ -441,6 +441,7 @@ The GUI preview path is optimized for responsive scrubbing: slider updates are d
 |- .gitignore
 |- CHANGELOG.md
 |- CONTRIBUTING.md
+|- docs/
 |- LICENSE
 |- README.md
 |- SECURITY.md
@@ -450,6 +451,14 @@ The GUI preview path is optimized for responsive scrubbing: slider updates are d
 ```
 
 The source package contains `cli/`, `core/`, `exporters/`, and `gui/` packages. The GUI package contains the optional PySide6 timeline viewer and its renderer adapters.
+
+## Project Documentation
+
+- [Architecture](docs/architecture.md) explains the core, exporter, CLI, and GUI layer boundaries.
+- [Testing](docs/testing.md) lists the current test command and tagged-stage test results.
+- [Workflow](docs/workflow.md) describes the recommended branch, PR, and release-tag workflow.
+- [Repository archaeology](docs/archaeology/README.md) records the local tag inventory, stage logs, transition logs, and branch map.
+- [PR plan](docs/pr-plan.md) proposes a review sequence for archaeology, tests, refactors, and workflow cleanup.
 
 ## Known Limitations
 
