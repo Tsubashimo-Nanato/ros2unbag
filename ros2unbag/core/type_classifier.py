@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .decoder import flatten_message, is_scalar, message_to_plain
+from .export_policy import suggested_exports_for_category
 from .models import MessageRecord, TopicInfo
 
 
@@ -61,18 +62,6 @@ def classify_topic(topic_info: TopicInfo, sample_messages: list[MessageRecord]) 
     if _has_nested_arrays(decoded[0]):
         return "matrix_like"
     return "custom_struct"
-
-
-def suggested_exports_for_category(category: str) -> list[str]:
-    if category in {"scalar", "text", "vector_struct", "pose", "odometry", "transform"}:
-        return ["csv", "jsonl", "parquet", "sqlite"]
-    if category in {"matrix_like", "custom_struct"}:
-        return ["jsonl", "csv", "parquet", "sqlite"]
-    if category in {"image", "compressed_image", "mask_candidate"}:
-        return ["png", "jpg", "mp4", "npz", "csv", "jsonl", "raw"]
-    if category == "point_cloud":
-        return ["pcd", "ply", "npz", "csv", "parquet", "sqlite", "jsonl", "raw"]
-    return ["raw"]
 
 
 def _decoded_mask_evidence(topic_info: TopicInfo, sample_messages: list[MessageRecord]) -> bool:

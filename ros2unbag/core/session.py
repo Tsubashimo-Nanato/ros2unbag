@@ -5,6 +5,15 @@ from contextlib import AbstractContextManager
 from pathlib import Path
 
 from .bag_reader import BaseBagReader, open_bag_reader, time_bounds_from_topics
+from .export_policy import (
+    ALL_EXPORTS,
+    FUTURE_EXPORTS,
+    IMPLEMENTED_EXPORTS,
+    compatible_export_formats,
+    default_export_formats,
+    validate_export_format,
+    validate_topic_export_format,
+)
 from .manifest import build_manifest, write_manifest, write_topics_csv
 from .models import ExportResult, ExportSelection, Manifest, TopicDuration, TopicInfo
 from .progress import ProgressCallback
@@ -22,29 +31,7 @@ from ..exporters.sqlite_exporter import export_topic_sqlite
 from ..exporters.video_exporter import export_topic_video
 
 
-IMPLEMENTED_EXPORTS = {
-    "csv",
-    "jpg",
-    "jsonl",
-    "mp4",
-    "npz",
-    "parquet",
-    "pcd",
-    "ply",
-    "png",
-    "raw",
-    "sqlite",
-}
-FUTURE_EXPORTS: dict[str, str] = {}
-ALL_EXPORTS = IMPLEMENTED_EXPORTS | set(FUTURE_EXPORTS)
 ProgressFactory = Callable[[str, int | None], AbstractContextManager[ProgressCallback]]
-DATA_EXPORTS = ["csv", "jsonl", "npz", "parquet", "raw", "sqlite"]
-IMAGE_EXPORTS = ["jpg", "mp4", "png"]
-POINT_CLOUD_EXPORTS = ["pcd", "ply"]
-IMAGE_MSGTYPES = {"sensor_msgs/msg/Image", "sensor_msgs/msg/CompressedImage"}
-IMAGE_CATEGORIES = {"image", "compressed_image", "mask_candidate"}
-POINT_CLOUD_MSGTYPES = {"sensor_msgs/msg/PointCloud2"}
-POINT_CLOUD_CATEGORIES = {"point_cloud"}
 
 
 class Session:
@@ -394,41 +381,6 @@ class Session:
         return self.reader
 
 
-def validate_export_format(fmt: str) -> str:
-    normalized = fmt.lower()
-    if normalized not in ALL_EXPORTS:
-        allowed = ", ".join(sorted(ALL_EXPORTS))
-        raise ValueError(f"Unsupported format {fmt!r}. Choose one of: {allowed}")
-    return normalized
-
-
-def compatible_export_formats(topic: TopicInfo) -> list[str]:
-    formats = list(DATA_EXPORTS)
-    if _is_image_topic(topic):
-        formats.extend(IMAGE_EXPORTS)
-    if _is_point_cloud_topic(topic):
-        formats.extend(POINT_CLOUD_EXPORTS)
-    return formats
-
-
-def validate_topic_export_format(topic: TopicInfo, fmt: str) -> None:
-    if fmt in compatible_export_formats(topic):
-        return
-    allowed = ", ".join(compatible_export_formats(topic))
-    raise ValueError(
-        f"Format {fmt!r} is not compatible with topic {topic.name} "
-        f"({topic.msgtype}, {topic.category}). Allowed formats: {allowed}"
-    )
-
-
-def _is_image_topic(topic: TopicInfo) -> bool:
-    return topic.msgtype in IMAGE_MSGTYPES or topic.category in IMAGE_CATEGORIES
-
-
-def _is_point_cloud_topic(topic: TopicInfo) -> bool:
-    return topic.msgtype in POINT_CLOUD_MSGTYPES or topic.category in POINT_CLOUD_CATEGORIES
-
-
 def run_export(
     reader: BaseBagReader,
     *,
@@ -515,19 +467,6 @@ def run_export(
             progress_callback=progress_callback,
         )
     raise ValueError(f"Unsupported implemented export format: {fmt}")
-
-
-def default_export_formats(topic: TopicInfo) -> list[str]:
-    decoded = bool(topic.sample_summary.get("decoded_available"))
-    if topic.category in {"scalar", "text", "vector_struct", "pose", "odometry", "transform"}:
-        return ["csv", "parquet", "jsonl", "sqlite"] if decoded else ["raw"]
-    if topic.category in {"matrix_like", "custom_struct"}:
-        return ["jsonl", "csv", "parquet", "sqlite"] if decoded else ["raw"]
-    if topic.category in {"image", "compressed_image", "mask_candidate"}:
-        return ["png", "npz"] if decoded else ["raw"]
-    if topic.category == "point_cloud":
-        return ["pcd", "ply", "npz", "csv", "parquet", "sqlite", "jsonl"] if decoded else ["raw"]
-    return ["raw"]
 
 
 def _span_sec(start_ns: int | None, end_ns: int | None) -> float | None:
