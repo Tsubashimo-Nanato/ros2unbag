@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from bisect import bisect_left
-from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
-from time import perf_counter
 from typing import Any
 
 from ros2unbag.core.decoder import decode_compressed_image, decode_sensor_image
@@ -19,21 +17,18 @@ from ros2unbag.core.preview import (
 from ros2unbag.core.session import Session, compatible_export_formats
 from ros2unbag.core.update_check import UpdateInfo, check_for_update, current_version
 from ros2unbag.cli.upgrade import build_upgrade_plan, run_upgrade
+from ros2unbag.gui.playback import MAX_RENDERED_PLAYBACK_FRAMES, RenderedFrame
+from ros2unbag.gui.progress import GuiProgressContext as _GuiProgressContext
 from ros2unbag.gui.renderers import create_point_cloud_renderer
+from ros2unbag.gui.theme import local_changelog_text as _local_changelog_text
+from ros2unbag.gui.theme import normalize_theme as _normalize_theme
+from ros2unbag.gui.theme import system_theme as _system_theme
+from ros2unbag.gui.theme import theme_palette as _theme_palette
+from ros2unbag.gui.theme import theme_stylesheet as _theme_stylesheet
 
 
 TOPIC_MIME = "application/x-ros2unbag-topic"
 IMAGE_CATEGORIES = {"image", "compressed_image", "mask_candidate"}
-MAX_RENDERED_PLAYBACK_FRAMES = 300
-
-
-@dataclass(slots=True)
-class RenderedFrame:
-    timestamp_ns: int
-    pixmap: Any
-    width: int
-    height: int
-    encoding: str
 
 
 class TimelineViewer:
@@ -1330,58 +1325,6 @@ def run_gui(bag_path: str | Path | None = None) -> None:
     app.exec()
 
 
-class _GuiProgressContext:
-    def __init__(
-        self,
-        owner: TimelineViewer,
-        progress_dialog: Any,
-        description: str,
-        total: int | None,
-    ) -> None:
-        self.owner = owner
-        self.progress_dialog = progress_dialog
-        self.description = description
-        self.total = total
-        self.count = 0
-        self._last_update = 0.0
-
-    def __enter__(self) -> Any:
-        self.owner._start_progress(self.description, self.total)
-        if self.total is None or self.total <= 0:
-            self.progress_dialog.setRange(0, 0)
-        else:
-            self.progress_dialog.setRange(0, self.total)
-            self.progress_dialog.setValue(0)
-        self.progress_dialog.setLabelText(self.description)
-        return self._advance
-
-    def __exit__(self, _exc_type: Any, _exc: Any, _tb: Any) -> None:
-        self.owner._finish_progress()
-
-    def _advance(self, amount: int) -> None:
-        self.count += amount
-        now = perf_counter()
-        if (
-            self.count == 1
-            or self.total is not None and self.count >= self.total
-            or now - self._last_update >= 0.05
-        ):
-            self._last_update = now
-            self.owner._set_progress(self.description, self.count, self.total)
-            if self.total is None or self.total <= 0:
-                self.progress_dialog.setRange(0, 0)
-            else:
-                self.progress_dialog.setRange(0, self.total)
-                self.progress_dialog.setValue(min(self.count, self.total))
-            self.progress_dialog.setLabelText(
-                f"{self.description} ({self.count}"
-                + (f"/{self.total})" if self.total else ")")
-            )
-            self.owner.QtWidgets.QApplication.processEvents()
-            if self.progress_dialog.wasCanceled():
-                raise RuntimeError("Operation cancelled")
-
-
 def _create_topic_tree_class(QtWidgets: Any, QtCore: Any) -> type:
     class TopicTreeWidget(QtWidgets.QTreeWidget):
         def mimeData(self, items: list[Any]) -> Any:
@@ -1806,233 +1749,3 @@ def _is_image_topic(topic: TopicInfo | None) -> bool:
     return topic.msgtype in {"sensor_msgs/msg/Image", "sensor_msgs/msg/CompressedImage"} or topic.category in IMAGE_CATEGORIES
 
 
-def _normalize_theme(theme: str) -> str:
-    return "dark" if theme.lower() == "dark" else "light"
-
-
-def _system_theme(QtWidgets: Any) -> str:
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        return "light"
-    color = app.palette().color(app.palette().ColorRole.Window)
-    luminance = (0.2126 * color.red()) + (0.7152 * color.green()) + (0.0722 * color.blue())
-    return "dark" if luminance < 128 else "light"
-
-
-def _theme_palette(theme: str) -> dict[str, str]:
-    if _normalize_theme(theme) == "dark":
-        return {
-            "window": "#1b1b1b",
-            "panel": "#242424",
-            "panel_alt": "#2d2d2d",
-            "viewer_bg": "#101010",
-            "input": "#2a2a2a",
-            "text": "#f2f2f2",
-            "muted": "#b8b8b8",
-            "border": "#4a4a4a",
-            "button": "#303030",
-            "button_hover": "#3a3a3a",
-            "accent": "#ff9f1c",
-            "highlight_text": "#111111",
-            "progress": "#ff9f1c",
-        }
-    return {
-        "window": "#f3f4f6",
-        "panel": "#ffffff",
-        "panel_alt": "#f8fafc",
-        "viewer_bg": "#edf0f3",
-        "input": "#ffffff",
-        "text": "#202124",
-        "muted": "#636a73",
-        "border": "#c7ccd4",
-        "button": "#f5f7fa",
-        "button_hover": "#e9edf3",
-        "accent": "#d97706",
-        "highlight_text": "#ffffff",
-        "progress": "#d97706",
-    }
-
-
-def _theme_stylesheet(palette: dict[str, str]) -> str:
-    return f"""
-        QMainWindow, QDialog {{
-            background: {palette['window']};
-            color: {palette['text']};
-        }}
-        QWidget {{
-            color: {palette['text']};
-        }}
-        QMenuBar, QMenu {{
-            background: {palette['panel']};
-            color: {palette['text']};
-            border: 1px solid {palette['border']};
-        }}
-        QMenuBar::item:selected, QMenu::item:selected {{
-            background: {palette['button_hover']};
-        }}
-        QMenu::separator {{
-            background: {palette['border']};
-            height: 1px;
-            margin: 4px 8px;
-        }}
-        QDockWidget {{
-            color: {palette['text']};
-            titlebar-close-icon: none;
-            titlebar-normal-icon: none;
-        }}
-        QDockWidget::title {{
-            background: {palette['panel']};
-            color: {palette['text']};
-            padding: 4px 6px;
-            font-weight: 600;
-        }}
-        QWidget#centralSpacer {{
-            background: {palette['window']};
-        }}
-        QWidget#mainPanel, QWidget#viewGrid {{
-            background: {palette['viewer_bg']};
-        }}
-        QWidget#propertiesPanel, QWidget#propertiesViewport, QScrollArea#propertiesScroll,
-        QWidget#outputPanel {{
-            background: {palette['panel']};
-            color: {palette['text']};
-        }}
-        QFrame#topicViewPane {{
-            border: 1px solid {palette['border']};
-            border-radius: 4px;
-            background: {palette['viewer_bg']};
-            color: {palette['text']};
-        }}
-        QLabel {{
-            background: transparent;
-            color: {palette['text']};
-        }}
-        QLabel#viewTitle {{
-            color: {palette['text']};
-            font-weight: 600;
-        }}
-        QTreeWidget, QTextEdit, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QScrollArea {{
-            background: {palette['input']};
-            color: {palette['text']};
-            border: 1px solid {palette['border']};
-            selection-background-color: {palette['accent']};
-            selection-color: {palette['highlight_text']};
-        }}
-        QTreeWidget {{
-            alternate-background-color: {palette['panel_alt']};
-            show-decoration-selected: 1;
-        }}
-        QHeaderView::section {{
-            background: {palette['panel_alt']};
-            color: {palette['text']};
-            border: 0;
-            border-right: 1px solid {palette['border']};
-            border-bottom: 1px solid {palette['border']};
-            padding: 4px 6px;
-        }}
-        QTreeWidget::branch {{
-            background: {palette['input']};
-        }}
-        QTreeWidget::item:selected {{
-            background: {palette['accent']};
-            color: {palette['highlight_text']};
-        }}
-        QCheckBox {{
-            background: transparent;
-            color: {palette['text']};
-            spacing: 6px;
-        }}
-        QCheckBox::indicator {{
-            width: 14px;
-            height: 14px;
-            border: 1px solid {palette['border']};
-            border-radius: 3px;
-            background: {palette['input']};
-        }}
-        QCheckBox::indicator:checked {{
-            background: {palette['accent']};
-            border-color: {palette['accent']};
-        }}
-        QPushButton, QToolButton {{
-            background: {palette['button']};
-            color: {palette['text']};
-            border: 1px solid {palette['border']};
-            border-radius: 4px;
-            padding: 3px 8px;
-        }}
-        QPushButton:hover, QToolButton:hover {{
-            background: {palette['button_hover']};
-        }}
-        QPushButton:disabled, QToolButton:disabled {{
-            color: {palette['muted']};
-        }}
-        QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button,
-        QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
-            background: {palette['button']};
-            border-left: 1px solid {palette['border']};
-            width: 18px;
-        }}
-        QComboBox QAbstractItemView {{
-            background: {palette['input']};
-            color: {palette['text']};
-            selection-background-color: {palette['accent']};
-            selection-color: {palette['highlight_text']};
-        }}
-        QGroupBox {{
-            color: {palette['text']};
-            border: 1px solid {palette['border']};
-            border-radius: 4px;
-            font-weight: 600;
-            margin-top: 8px;
-        }}
-        QGroupBox::title {{
-            subcontrol-origin: margin;
-            left: 8px;
-            padding: 0 4px;
-        }}
-        QScrollBar:vertical, QScrollBar:horizontal {{
-            background: {palette['panel']};
-            border: 0;
-            margin: 0;
-        }}
-        QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
-            background: {palette['border']};
-            border-radius: 4px;
-            min-height: 24px;
-            min-width: 24px;
-        }}
-        QScrollBar::add-line, QScrollBar::sub-line {{
-            width: 0;
-            height: 0;
-        }}
-        QProgressBar {{
-            background: {palette['input']};
-            color: {palette['text']};
-            border: 1px solid {palette['border']};
-            border-radius: 3px;
-            text-align: center;
-        }}
-        QProgressBar::chunk {{
-            background: {palette['progress']};
-        }}
-        QSlider::groove:horizontal {{
-            background: {palette['border']};
-            height: 4px;
-            border-radius: 2px;
-        }}
-        QSlider::handle:horizontal {{
-            background: {palette['accent']};
-            width: 14px;
-            margin: -5px 0;
-            border-radius: 7px;
-        }}
-    """
-
-
-def _local_changelog_text() -> str:
-    changelog_path = Path(__file__).resolve().parents[2] / "CHANGELOG.md"
-    try:
-        text = changelog_path.read_text(encoding="utf-8")
-    except OSError:
-        return "Local changelog was not found in this installation."
-    return text[:12_000]

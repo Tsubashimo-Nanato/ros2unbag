@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tomllib
 import unittest
 
+import ros2unbag
 from ros2unbag.cli.main import UNINSTALL_PACKAGES
 
 
@@ -25,6 +27,12 @@ class CliMetadataTests(unittest.TestCase):
         self.assertTrue((root / "install.bat").exists())
         self.assertTrue((root / "uninstall.bat").exists())
         self.assertTrue((root / "ros2unbag.bat").exists())
+
+    def test_package_version_matches_project_metadata(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+
+        self.assertEqual(ros2unbag.__version__, metadata["project"]["version"])
 
 
 if __name__ == "__main__":

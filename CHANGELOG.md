@@ -2,6 +2,19 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.6.0] - 2026-06-13
+
+### Changed
+
+- Split export format policy and exporter dispatch out of the session orchestration layer, keeping the existing CLI, REPL, and exporter behavior compatible.
+- Split REPL parsing and completion into focused modules while preserving existing command parsing, Windows path handling, and tab-completion behavior.
+- Split GUI theme, playback cache metadata, and progress-dialog plumbing out of the timeline viewer coordinator without changing the visible GUI workflow.
+- Updated package metadata, README status, and upgrade examples for the `v1.6.0` release.
+
+### Tested
+
+- Verified the refactor against the existing unittest and pytest suites, plus focused coverage for export policy/dispatch alignment.
+
 ## [1.5.2] - 2026-06-06
 
 ### Fixed
