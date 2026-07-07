@@ -394,6 +394,53 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
+    def test_lane_topic_render_uses_lane_plot_without_image_warning(self) -> None:
+        viewer = TimelineViewer()
+        warnings: list[str] = []
+        try:
+            topics = {role: _lane_topic(role) for role in ("center", "left", "right")}
+            viewer._bag_start_ns = 0
+            viewer._lane_overlay_data = _lane_overlay_data()
+            viewer.lane_overlay.set_topics(topics)
+            viewer.lane_overlay.set_data(viewer._lane_overlay_data)
+            viewer._show_warning = lambda message: warnings.append(message)  # type: ignore[method-assign]
+            pane = viewer._panes[0]
+            pane.set_topic(topics["center"].name, topics["center"])
+
+            self.assertTrue(pane.ensure_rendered_for_playback())
+
+            self.assertEqual(warnings, [])
+            self.assertIs(pane.stack.currentWidget(), pane.lane_plot)
+            self.assertEqual(pane.lane_plot._visible_roles, {"center", "left", "right"})
+        finally:
+            viewer.window.close()
+
+    def test_lane_view_uses_checked_topic_tree_roles(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topics = [_lane_topic(role) for role in ("center", "left", "right")]
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = topics
+            viewer._bag_start_ns = 0
+            viewer._lane_overlay_data = _lane_overlay_data()
+            viewer._populate_topics()
+            _tree_item(viewer.topic_tree, "center").setCheckState(
+                0,
+                QtCore.Qt.CheckState.Checked,
+            )
+            _tree_item(viewer.topic_tree, "right").setCheckState(
+                0,
+                QtCore.Qt.CheckState.Checked,
+            )
+            pane = viewer._panes[0]
+            pane.set_topic(topics[0].name, topics[0])
+            pane.show_at_timestamp(100)
+
+            self.assertIs(pane.stack.currentWidget(), pane.lane_plot)
+            self.assertEqual(pane.lane_plot._visible_roles, {"center", "right"})
+        finally:
+            viewer.window.close()
+
     def test_lane_overlay_missing_topics_stays_empty(self) -> None:
         viewer = TimelineViewer()
         calls = []

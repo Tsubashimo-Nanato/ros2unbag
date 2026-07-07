@@ -8,8 +8,10 @@ from typing import Any
 
 from ros2unbag.core.decoder import decode_compressed_image, decode_sensor_image
 from ros2unbag.core.lane_lines import (
+    LANE_ROLES,
     LaneOverlayData,
     build_lane_overlay_data,
+    lane_role_for_topic,
     lane_topics,
 )
 from ros2unbag.core.models import ExportSelection, TopicInfo
@@ -238,6 +240,7 @@ class TimelineViewer:
         self.topic_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
         self.topic_tree.itemSelectionChanged.connect(self._on_topic_selection_changed)
         self.topic_tree.itemDoubleClicked.connect(self._on_topic_double_clicked)
+        self.topic_tree.itemChanged.connect(self._on_topic_item_changed)
         self.topic_tree.setMinimumWidth(260)
         self.topic_tree.setRootIsDecorated(True)
         self.topic_tree.setItemsExpandable(True)
@@ -656,57 +659,61 @@ class TimelineViewer:
         step(1)
 
     def _populate_topics(self) -> None:
-        self.topic_tree.clear()
-        self._topic_by_item.clear()
-        if hasattr(self, "topic_search"):
-            self.topic_search.clear()
-        topics = self._topic_snapshot()
-        self._topic_info_by_name = {topic.name: topic for topic in topics}
-        nodes: dict[tuple[str, ...], Any] = {}
-        folder_icon = self.window.style().standardIcon(
-            self.QtWidgets.QStyle.StandardPixmap.SP_DirIcon
-        )
-        topic_icon = self.window.style().standardIcon(
-            self.QtWidgets.QStyle.StandardPixmap.SP_FileIcon
-        )
-        for topic in topics:
-            parts = [part for part in topic.name.split("/") if part]
-            parent = None
-            for depth, part in enumerate(parts):
-                key = tuple(parts[: depth + 1])
-                item = nodes.get(key)
-                if item is None:
-                    is_leaf = depth == len(parts) - 1
-                    item = self.QtWidgets.QTreeWidgetItem([
-                        part,
-                        topic.category if is_leaf else "",
-                        str(topic.message_count) if is_leaf else "",
-                    ])
-                    flags = item.flags()
-                    if is_leaf:
-                        flags |= self.QtCore.Qt.ItemFlag.ItemIsDragEnabled
-                        item.setIcon(0, topic_icon)
-                        item.setData(0, self.QtCore.Qt.ItemDataRole.UserRole, topic.name)
-                    else:
-                        flags &= ~self.QtCore.Qt.ItemFlag.ItemIsDragEnabled
-                        flags &= ~self.QtCore.Qt.ItemFlag.ItemIsSelectable
-                        item.setIcon(0, folder_icon)
-                        font = item.font(0)
-                        font.setBold(True)
-                        item.setFont(0, font)
-                    item.setFlags(flags)
-                    if parent is None:
-                        self.topic_tree.addTopLevelItem(item)
-                    else:
-                        parent.addChild(item)
-                    nodes[key] = item
-                parent = item
-            if parent is not None:
-                parent.setCheckState(0, self.QtCore.Qt.CheckState.Unchecked)
-                parent.setToolTip(0, topic.name)
-                parent.setData(0, self.QtCore.Qt.ItemDataRole.UserRole, topic.name)
-                self._topic_by_item[id(parent)] = topic.name
-        self.topic_tree.collapseAll()
+        signals_blocked = self.topic_tree.blockSignals(True)
+        try:
+            self.topic_tree.clear()
+            self._topic_by_item.clear()
+            if hasattr(self, "topic_search"):
+                self.topic_search.clear()
+            topics = self._topic_snapshot()
+            self._topic_info_by_name = {topic.name: topic for topic in topics}
+            nodes: dict[tuple[str, ...], Any] = {}
+            folder_icon = self.window.style().standardIcon(
+                self.QtWidgets.QStyle.StandardPixmap.SP_DirIcon
+            )
+            topic_icon = self.window.style().standardIcon(
+                self.QtWidgets.QStyle.StandardPixmap.SP_FileIcon
+            )
+            for topic in topics:
+                parts = [part for part in topic.name.split("/") if part]
+                parent = None
+                for depth, part in enumerate(parts):
+                    key = tuple(parts[: depth + 1])
+                    item = nodes.get(key)
+                    if item is None:
+                        is_leaf = depth == len(parts) - 1
+                        item = self.QtWidgets.QTreeWidgetItem([
+                            part,
+                            topic.category if is_leaf else "",
+                            str(topic.message_count) if is_leaf else "",
+                        ])
+                        flags = item.flags()
+                        if is_leaf:
+                            flags |= self.QtCore.Qt.ItemFlag.ItemIsDragEnabled
+                            item.setIcon(0, topic_icon)
+                            item.setData(0, self.QtCore.Qt.ItemDataRole.UserRole, topic.name)
+                        else:
+                            flags &= ~self.QtCore.Qt.ItemFlag.ItemIsDragEnabled
+                            flags &= ~self.QtCore.Qt.ItemFlag.ItemIsSelectable
+                            item.setIcon(0, folder_icon)
+                            font = item.font(0)
+                            font.setBold(True)
+                            item.setFont(0, font)
+                        item.setFlags(flags)
+                        if parent is None:
+                            self.topic_tree.addTopLevelItem(item)
+                        else:
+                            parent.addChild(item)
+                        nodes[key] = item
+                    parent = item
+                if parent is not None:
+                    parent.setCheckState(0, self.QtCore.Qt.CheckState.Unchecked)
+                    parent.setToolTip(0, topic.name)
+                    parent.setData(0, self.QtCore.Qt.ItemDataRole.UserRole, topic.name)
+                    self._topic_by_item[id(parent)] = topic.name
+            self.topic_tree.collapseAll()
+        finally:
+            self.topic_tree.blockSignals(signals_blocked)
         self._apply_topic_tree_item_styles()
         self._autosize_topic_columns()
 
@@ -764,6 +771,55 @@ class TimelineViewer:
             item.setExpanded(child_matches)
         return visible
 
+    def _checked_lane_roles(self) -> list[str]:
+        checked: set[str] = set()
+        for item in self._topic_tree_items():
+            if item.checkState(0) != self.QtCore.Qt.CheckState.Checked:
+                continue
+            topic = item.data(0, self.QtCore.Qt.ItemDataRole.UserRole)
+            if not topic:
+                continue
+            info = self._topic_info_by_name.get(str(topic))
+            if info is None:
+                continue
+            role = lane_role_for_topic(info)
+            if role is not None:
+                checked.add(role)
+        return [role for role in LANE_ROLES if role in checked]
+
+    def _topic_tree_items(self) -> list[Any]:
+        items: list[Any] = []
+
+        def collect(item: Any) -> None:
+            items.append(item)
+            for index in range(item.childCount()):
+                collect(item.child(index))
+
+        for index in range(self.topic_tree.topLevelItemCount()):
+            collect(self.topic_tree.topLevelItem(index))
+        return items
+
+    def _lane_roles_for_view(self, topic_info: TopicInfo | None) -> list[str]:
+        if topic_info is None:
+            return []
+        role = lane_role_for_topic(topic_info)
+        if role is None:
+            return []
+        checked_roles = self._checked_lane_roles()
+        if checked_roles:
+            return checked_roles
+        if hasattr(self, "lane_overlay"):
+            visible_roles = self.lane_overlay.visible_roles()
+            if visible_roles:
+                return visible_roles
+        return [role]
+
+    def _refresh_lane_view_panes(self) -> None:
+        timestamp_ns = self._current_timestamp_ns()
+        for pane in self._all_panes():
+            if pane.is_lane_topic():
+                pane.show_at_timestamp(timestamp_ns)
+
     def _autosize_topic_columns(self) -> None:
         widths = self._preferred_topic_column_widths()
         for column, width in enumerate(widths):
@@ -789,6 +845,8 @@ class TimelineViewer:
         self._lane_overlay_data = None
         if hasattr(self, "lane_overlay"):
             self.lane_overlay.set_topics({})
+        if hasattr(self, "_panes"):
+            self._refresh_lane_view_panes()
 
     def _prepare_lane_overlay(self, topics: list[TopicInfo]) -> None:
         self._lane_load_generation += 1
@@ -824,6 +882,7 @@ class TimelineViewer:
             self._lane_overlay_data = data
             self.lane_overlay.set_data(data)
             self.lane_overlay.show_at_timestamp(self._current_timestamp_ns())
+            self._refresh_lane_view_panes()
             loaded = ", ".join(
                 f"{series.role}={len(series.frames)}"
                 for series in data.ordered_series()
@@ -847,6 +906,7 @@ class TimelineViewer:
 
     def _on_lane_overlay_selection_changed(self) -> None:
         self.lane_overlay.show_at_timestamp(self._current_timestamp_ns())
+        self._refresh_lane_view_panes()
 
     def _on_topic_selection_changed(self) -> None:
         topic = self._selected_topic()
@@ -860,6 +920,15 @@ class TimelineViewer:
         topic = item.data(0, self.QtCore.Qt.ItemDataRole.UserRole)
         if topic and self._active_pane is not None:
             self.assign_topic_to_pane(self._active_pane, str(topic))
+
+    def _on_topic_item_changed(self, item: Any, _column: int) -> None:
+        topic = item.data(0, self.QtCore.Qt.ItemDataRole.UserRole)
+        if not topic:
+            return
+        info = self._topic_info_by_name.get(str(topic))
+        if info is None or lane_role_for_topic(info) is None:
+            return
+        self._refresh_lane_view_panes()
 
     def _apply_topic_settings(self, topic: str) -> None:
         settings = self.settings.topics.get(topic)
@@ -1583,6 +1652,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.rendered_frames: list[RenderedFrame] = []
             self.rendered_timestamps: list[int] = []
             self.rendered_size: tuple[int, int] | None = None
+            self._lane_plot_data: LaneOverlayData | None = None
+            self._lane_plot_roles: tuple[str, ...] = ()
             self.setAcceptDrops(True)
             self.setObjectName("topicViewPane")
             self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
@@ -1615,10 +1686,13 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.image_label.setMinimumSize(320, 220)
             self.point_renderer = create_point_cloud_renderer(QtWidgets)
             self.point_widget = self.point_renderer.widget()
+            self.lane_plot = owner.LaneOverlayPanel.PlotWidget(self)
+            self.lane_plot.set_empty_text("Drop a lane line PointCloud2 topic here.")
             self.raw_text = QtWidgets.QTextEdit()
             self.raw_text.setReadOnly(True)
             self.stack.addWidget(self.image_label)
             self.stack.addWidget(self.point_widget)
+            self.stack.addWidget(self.lane_plot)
             self.stack.addWidget(self.raw_text)
             layout.addWidget(self.stack, 1)
 
@@ -1638,6 +1712,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.raw_text.setStyleSheet(
                 f"background: {palette['input']}; color: {palette['text']};"
             )
+            self.lane_plot.apply_theme(palette)
 
         def clear_topic(self) -> None:
             self.topic = None
@@ -1645,9 +1720,13 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.rendered_frames.clear()
             self.rendered_timestamps.clear()
             self.rendered_size = None
+            self._lane_plot_data = None
+            self._lane_plot_roles = ()
             self._refresh_title()
             self.image_label.clear()
             self.image_label.setText("Drop an image topic or select a topic.")
+            self.lane_plot.set_data(None)
+            self.lane_plot.set_visible_roles(())
             self.raw_text.clear()
 
         def set_topic(self, topic: str, topic_info: TopicInfo) -> None:
@@ -1656,6 +1735,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.rendered_frames.clear()
             self.rendered_timestamps.clear()
             self.rendered_size = None
+            self._lane_plot_data = None
+            self._lane_plot_roles = ()
             self._refresh_title()
             self.title_label.setToolTip(topic)
             self.raw_text.setPlainText(f"{topic}\n{topic_info.msgtype}\n{topic_info.category}")
@@ -1673,12 +1754,24 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
         def is_image_topic(self) -> bool:
             return _is_image_topic(self.topic_info)
 
+        def is_lane_topic(self) -> bool:
+            if self.topic_info is None:
+                return False
+            return lane_role_for_topic(self.topic_info) is not None
+
         def ensure_rendered_for_playback(self) -> bool:
             if self.topic is None or self.topic_info is None:
                 self.owner._log("Assign an image topic to this view before rendering.")
                 return False
+            if self.is_lane_topic():
+                self._show_lane_plot_at_timestamp(self.owner._current_timestamp_ns())
+                if self.owner._lane_overlay_data is None:
+                    self.owner._log("Lane line frames are still loading; the plot will update when ready.")
+                return True
             if not self.is_image_topic():
-                self.owner._show_warning("Only image-compatible topics can be rendered for playback.")
+                self.owner._show_warning(
+                    "Only image-compatible topics and lane line PointCloud2 topics can be rendered for playback."
+                )
                 return False
             return self._render_playback_window(self.owner._current_timestamp_ns())
 
@@ -1783,6 +1876,9 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             if self.rendered_frames:
                 self._show_rendered_frame(timestamp_ns)
                 return
+            if self.is_lane_topic():
+                self._show_lane_plot_at_timestamp(timestamp_ns)
+                return
             preview = self.owner.preview
             if preview is None:
                 return
@@ -1839,6 +1935,31 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             frame = self.rendered_frames[selected]
             self.image_label.setPixmap(frame.pixmap)
             self.stack.setCurrentWidget(self.image_label)
+
+        def _show_lane_plot_at_timestamp(self, timestamp_ns: int | None) -> None:
+            data = self.owner._lane_overlay_data
+            roles = tuple(self.owner._lane_roles_for_view(self.topic_info))
+            if data is None:
+                self.lane_plot.set_empty_text("Loading lane line PointCloud2 frames...")
+                if self._lane_plot_data is not None:
+                    self.lane_plot.set_data(None)
+                    self._lane_plot_data = None
+                if self._lane_plot_roles != roles:
+                    self.lane_plot.set_visible_roles(roles)
+                    self._lane_plot_roles = roles
+                self.lane_plot.show_at_timestamp(timestamp_ns)
+                self.stack.setCurrentWidget(self.lane_plot)
+                return
+            self.lane_plot.set_empty_text("No lane line frames were loaded.")
+            if self._lane_plot_data is not data:
+                self.lane_plot.set_data(data)
+                self._lane_plot_data = data
+                self._lane_plot_roles = ()
+            if self._lane_plot_roles != roles:
+                self.lane_plot.set_visible_roles(roles)
+                self._lane_plot_roles = roles
+            self.lane_plot.show_at_timestamp(timestamp_ns)
+            self.stack.setCurrentWidget(self.lane_plot)
 
         def contextMenuEvent(self, event: Any) -> None:
             menu = QtWidgets.QMenu(self)

@@ -33,11 +33,14 @@ def create_lane_overlay_panel_class(
                 "text": "#202124",
                 "muted": "#636a73",
                 "border": "#c7ccd4",
+                "accent": "#0f6bff",
             }
             self._data: LaneOverlayData | None = None
             self._visible_roles: set[str] = set()
             self._timestamp_ns: int | None = None
             self._bounds: LaneBounds | None = None
+            self._empty_text = "Open a bag with lane line PointCloud2 topics."
+            self.setFont(QtGui.QFont("Segoe UI", 9))
             self.setMinimumSize(300, 260)
 
         @property
@@ -46,6 +49,10 @@ def create_lane_overlay_panel_class(
 
         def apply_theme(self, palette: dict[str, str]) -> None:
             self._palette = dict(palette)
+            self.update()
+
+        def set_empty_text(self, text: str) -> None:
+            self._empty_text = text
             self.update()
 
         def set_data(self, data: LaneOverlayData | None) -> None:
@@ -73,7 +80,7 @@ def create_lane_overlay_panel_class(
             self._draw_grid(painter, plot_rect)
 
             if self._data is None:
-                self._draw_center_text(painter, plot_rect, "Open a bag with lane line PointCloud2 topics.")
+                self._draw_center_text(painter, plot_rect, self._empty_text)
                 painter.end()
                 return
             if not self._visible_roles:
@@ -95,7 +102,7 @@ def create_lane_overlay_panel_class(
             for series, frame in frame_items:
                 self._draw_frame(painter, mapper, series, frame)
             self._draw_legend(painter, plot_rect, frame_items)
-            self._draw_axes(painter, plot_rect)
+            self._draw_axes(painter, plot_rect, self._bounds)
             painter.end()
 
         def _refresh_bounds(self) -> None:
@@ -117,10 +124,10 @@ def create_lane_overlay_panel_class(
             return frames
 
         def _plot_rect(self, rect: Any) -> Any:
-            left = 46.0
+            left = 58.0
             top = 22.0
             right = 18.0
-            bottom = 36.0
+            bottom = 48.0
             width = max(1.0, float(rect.width()) - left - right)
             height = max(1.0, float(rect.height()) - top - bottom)
             return QtCore.QRectF(left, top, width, height)
@@ -144,18 +151,72 @@ def create_lane_overlay_panel_class(
             painter.setPen(QtGui.QPen(border, 1))
             painter.drawRect(plot_rect)
 
-        def _draw_axes(self, painter: Any, plot_rect: Any) -> None:
-            painter.setPen(QtGui.QColor(self._palette["muted"]))
+        def _draw_axes(self, painter: Any, plot_rect: Any, bounds: LaneBounds) -> None:
+            muted = QtGui.QColor(self._palette["muted"])
+            axis = QtGui.QColor(self._palette["text"])
+            axis.setAlpha(170)
+            painter.setPen(QtGui.QPen(axis, 1))
+            painter.drawLine(plot_rect.bottomLeft(), plot_rect.bottomRight())
+            painter.drawLine(plot_rect.bottomLeft(), plot_rect.topLeft())
+            self._draw_zero_axes(painter, plot_rect, bounds)
+
+            painter.setPen(muted)
+            for ratio, value in (
+                (0.0, bounds.min_x),
+                (0.5, (bounds.min_x + bounds.max_x) / 2.0),
+                (1.0, bounds.max_x),
+            ):
+                x = plot_rect.left() + (plot_rect.width() * ratio)
+                painter.drawText(
+                    QtCore.QRectF(x - 36.0, plot_rect.bottom() + 4.0, 72.0, 18.0),
+                    QtCore.Qt.AlignmentFlag.AlignCenter,
+                    self._axis_value(value),
+                )
+            for ratio, value in (
+                (0.0, bounds.max_y),
+                (0.5, (bounds.min_y + bounds.max_y) / 2.0),
+                (1.0, bounds.min_y),
+            ):
+                y = plot_rect.top() + (plot_rect.height() * ratio)
+                painter.drawText(
+                    QtCore.QRectF(2.0, y - 9.0, plot_rect.left() - 8.0, 18.0),
+                    QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                    self._axis_value(value),
+                )
             painter.drawText(
-                QtCore.QRectF(plot_rect.left(), plot_rect.bottom() + 8, plot_rect.width(), 20),
+                QtCore.QRectF(plot_rect.left(), plot_rect.bottom() + 24.0, plot_rect.width(), 18.0),
                 QtCore.Qt.AlignmentFlag.AlignCenter,
                 "x",
             )
             painter.drawText(
-                QtCore.QRectF(6, plot_rect.top(), 32, plot_rect.height()),
+                QtCore.QRectF(6.0, plot_rect.top(), 24.0, plot_rect.height()),
                 QtCore.Qt.AlignmentFlag.AlignCenter,
                 "y",
             )
+
+        def _draw_zero_axes(self, painter: Any, plot_rect: Any, bounds: LaneBounds) -> None:
+            zero_pen = QtGui.QPen(QtGui.QColor(self._palette["accent"]), 1)
+            zero_pen.setStyle(QtCore.Qt.PenStyle.DashLine)
+            painter.setPen(zero_pen)
+            if bounds.min_x <= 0.0 <= bounds.max_x:
+                ratio = (0.0 - bounds.min_x) / max(1e-9, bounds.max_x - bounds.min_x)
+                x = plot_rect.left() + (plot_rect.width() * ratio)
+                painter.drawLine(
+                    QtCore.QPointF(x, plot_rect.top()),
+                    QtCore.QPointF(x, plot_rect.bottom()),
+                )
+            if bounds.min_y <= 0.0 <= bounds.max_y:
+                ratio = (bounds.max_y - 0.0) / max(1e-9, bounds.max_y - bounds.min_y)
+                y = plot_rect.top() + (plot_rect.height() * ratio)
+                painter.drawLine(
+                    QtCore.QPointF(plot_rect.left(), y),
+                    QtCore.QPointF(plot_rect.right(), y),
+                )
+
+        def _axis_value(self, value: float) -> str:
+            if abs(value) >= 1000.0 or (0.0 < abs(value) < 0.01):
+                return f"{value:.2e}"
+            return f"{value:.2f}".rstrip("0").rstrip(".")
 
         def _draw_center_text(self, painter: Any, plot_rect: Any, text: str) -> None:
             painter.setPen(QtGui.QColor(self._palette["muted"]))
@@ -328,4 +389,5 @@ def create_lane_overlay_panel_class(
             if self._on_selection_changed is not None:
                 self._on_selection_changed()
 
+    LaneOverlayPanel.PlotWidget = LanePlotWidget
     return LaneOverlayPanel
