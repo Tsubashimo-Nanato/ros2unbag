@@ -7,6 +7,11 @@ from threading import Thread
 from typing import Any
 
 from ros2unbag.core.decoder import decode_compressed_image, decode_sensor_image
+from ros2unbag.core.lane_lines import (
+    LaneOverlayData,
+    build_lane_overlay_data,
+    lane_topics,
+)
 from ros2unbag.core.models import ExportSelection, TopicInfo
 from ros2unbag.core.preview import (
     PreviewService,
@@ -18,6 +23,7 @@ from ros2unbag.core.session import Session, compatible_export_formats
 from ros2unbag.core.update_check import UpdateInfo, check_for_update, current_version
 from ros2unbag.cli.upgrade import build_upgrade_plan, run_upgrade
 from ros2unbag.gui.playback import MAX_RENDERED_PLAYBACK_FRAMES, RenderedFrame
+from ros2unbag.gui.lane_overlay import create_lane_overlay_panel_class
 from ros2unbag.gui.progress import GuiProgressContext as _GuiProgressContext
 from ros2unbag.gui.renderers import create_point_cloud_renderer
 from ros2unbag.gui.theme import local_changelog_text as _local_changelog_text
@@ -39,6 +45,11 @@ class TimelineViewer:
         self.TopicTreeWidget = _create_topic_tree_class(self.QtWidgets, self.QtCore)
         self.TopicViewPane = _create_view_pane_class(
             self.QtWidgets, self.QtCore, self.QtGui
+        )
+        self.LaneOverlayPanel = create_lane_overlay_panel_class(
+            self.QtWidgets,
+            self.QtCore,
+            self.QtGui,
         )
         self.session = Session()
         self.preview: PreviewService | None = None
@@ -65,6 +76,9 @@ class TimelineViewer:
         self._dock_resize_generations = {"horizontal": 0, "vertical": 0}
         self._autosize_pending = False
         self._background_jobs: list[tuple[Any, Any, Any, Any]] = []
+        self._lane_topics_by_role: dict[str, TopicInfo] = {}
+        self._lane_overlay_data: LaneOverlayData | None = None
+        self._lane_load_generation = 0
 
         self.window = _create_drop_window(self.QtWidgets, self.QtCore, self.open_bag)
         self.window.setWindowTitle("ros2unbag Timeline Viewer")
@@ -81,6 +95,7 @@ class TimelineViewer:
     def open_bag(self, bag_path: str | Path) -> None:
         path = Path(bag_path)
         self._log(f"Opening {path}")
+        self._clear_lane_overlay()
         self._start_progress(f"Opening {path.name}", None)
         load_dialog = self.QtWidgets.QProgressDialog(
             f"Opening {path}...",
@@ -107,6 +122,7 @@ class TimelineViewer:
                 pane.clear_topic()
             self._populate_topics()
             self._load_metadata_time_bounds()
+            self._prepare_lane_overlay(topics)
             self._autosize_topic_columns()
             self._queue_autosize_docks()
             self._log(f"Opened {path} ({len(topics)} topics)")
@@ -321,6 +337,11 @@ class TimelineViewer:
         self.log_text.setMinimumHeight(100)
         output_layout.addWidget(self.log_text, 1)
 
+        self.lane_overlay = self.LaneOverlayPanel(
+            self.window,
+            on_selection_changed=self._on_lane_overlay_selection_changed,
+        )
+
         self.preview_timer = QtCore.QTimer()
         self.preview_timer.setSingleShot(True)
         self.preview_timer.setInterval(50)
@@ -341,6 +362,11 @@ class TimelineViewer:
             self.main_panel,
             QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
         )
+        self.lane_overlay_dock = self._make_dock(
+            "Lane line overlay",
+            self.lane_overlay,
+            QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
+        )
         self.properties_dock = self._make_dock(
             "Properties",
             settings_scroll,
@@ -353,7 +379,14 @@ class TimelineViewer:
         )
         self.topic_dock.setMinimumWidth(320)
         self.main_view_dock.setMinimumWidth(380)
+        self.lane_overlay_dock.setMinimumWidth(300)
+        self.lane_overlay_dock.setMinimumHeight(280)
         self.properties_dock.setMinimumWidth(220)
+        self.window.splitDockWidget(
+            self.main_view_dock,
+            self.lane_overlay_dock,
+            QtCore.Qt.Orientation.Vertical,
+        )
         self.window.splitDockWidget(
             self.main_view_dock,
             self.properties_dock,
@@ -631,6 +664,71 @@ class TimelineViewer:
             duration = max(0.0, (self._bag_end_ns - self._bag_start_ns) / 1e9)
             self.time_input.setRange(0.0, duration)
 
+    def _clear_lane_overlay(self) -> None:
+        self._lane_load_generation += 1
+        self._lane_topics_by_role = {}
+        self._lane_overlay_data = None
+        if hasattr(self, "lane_overlay"):
+            self.lane_overlay.set_topics({})
+
+    def _prepare_lane_overlay(self, topics: list[TopicInfo]) -> None:
+        self._lane_load_generation += 1
+        generation = self._lane_load_generation
+        self._lane_topics_by_role = lane_topics(topics)
+        self._lane_overlay_data = None
+        self.lane_overlay.set_topics(self._lane_topics_by_role)
+        if not self._lane_topics_by_role:
+            return
+        self._start_lane_overlay_load(generation)
+
+    def _start_lane_overlay_load(self, generation: int) -> None:
+        bag_path = self.session.bag_path
+        if bag_path is None:
+            return
+        backend = self.session.backend
+        topics = list(self._lane_topics_by_role.values())
+        self.lane_overlay.set_loading()
+
+        def work() -> LaneOverlayData:
+            worker_session = Session(backend=backend)
+            try:
+                worker_session.open_bag(bag_path)
+                if worker_session.reader is None:
+                    return LaneOverlayData(series_by_role={})
+                return build_lane_overlay_data(worker_session.reader, topics)
+            finally:
+                worker_session.close()
+
+        def handle_success(data: LaneOverlayData) -> None:
+            if generation != self._lane_load_generation:
+                return
+            self._lane_overlay_data = data
+            self.lane_overlay.set_data(data)
+            self.lane_overlay.show_at_timestamp(self._current_timestamp_ns())
+            loaded = ", ".join(
+                f"{series.role}={len(series.frames)}"
+                for series in data.ordered_series()
+            )
+            self._log(f"Lane line overlay loaded: {loaded} frame(s)")
+
+        def handle_error(message: str) -> None:
+            if generation != self._lane_load_generation:
+                return
+            self.lane_overlay.set_error(f"Lane line overlay failed: {message}")
+            self._log(f"Lane line overlay failed: {message}")
+
+        self._run_background(
+            title="Loading lane line overlay",
+            label="Loading lane line PointCloud2 frames...",
+            work=work,
+            on_success=handle_success,
+            on_error=handle_error,
+            parent=self.window,
+        )
+
+    def _on_lane_overlay_selection_changed(self) -> None:
+        self.lane_overlay.show_at_timestamp(self._current_timestamp_ns())
+
     def _on_topic_selection_changed(self) -> None:
         topic = self._selected_topic()
         if topic is None:
@@ -720,6 +818,8 @@ class TimelineViewer:
         self.window.setStyleSheet(stylesheet)
         for pane in self._all_panes():
             pane.apply_theme(palette)
+        if hasattr(self, "lane_overlay"):
+            self.lane_overlay.apply_theme(palette)
 
     def _request_preview_update(self) -> None:
         if self.play_timer.isActive():
@@ -801,11 +901,13 @@ class TimelineViewer:
 
     def _update_preview(self) -> None:
         timestamp_ns = self._current_timestamp_ns()
-        if self.preview is None or timestamp_ns is None:
+        if timestamp_ns is None:
             return
-        for pane in self._all_panes():
-            if pane.isVisible():
-                pane.show_at_timestamp(timestamp_ns)
+        if self.preview is not None:
+            for pane in self._all_panes():
+                if pane.isVisible():
+                    pane.show_at_timestamp(timestamp_ns)
+        self.lane_overlay.show_at_timestamp(timestamp_ns)
 
     def _maybe_offer_startup_update_check(self) -> None:
         mode = str(self._update_settings.value("updates/mode", "") or "")
