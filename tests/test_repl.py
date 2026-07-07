@@ -6,6 +6,7 @@ from pathlib import Path
 
 from prompt_toolkit.document import Document
 
+from ros2unbag.cli.parsing import parse_inspect_time
 from ros2unbag.cli.repl import (
     ExportSelectCompleter,
     Ros2UnbagCompleter,
@@ -20,6 +21,22 @@ class ReplTests(unittest.TestCase):
     def test_split_repl_line_preserves_windows_paths(self) -> None:
         tokens = split_repl_line(r"open .\bag\demo --backend sqlite")
         self.assertEqual(tokens, ["open", r".\bag\demo", "--backend", "sqlite"])
+
+    def test_absolute_inspect_time_preserves_nanosecond_integer(self) -> None:
+        value = parse_inspect_time("1768890667673884124", absolute_ns=True)
+
+        self.assertEqual(value, 1768890667673884124)
+        self.assertIsInstance(value, int)
+
+    def test_relative_inspect_time_remains_float_seconds(self) -> None:
+        value = parse_inspect_time("1.25", absolute_ns=False)
+
+        self.assertEqual(value, 1.25)
+        self.assertIsInstance(value, float)
+
+    def test_absolute_inspect_time_rejects_fractional_value(self) -> None:
+        with self.assertRaisesRegex(ValueError, "integer nanosecond timestamp"):
+            parse_inspect_time("1.25", absolute_ns=True)
 
     def test_completes_format_values(self) -> None:
         completer = Ros2UnbagCompleter(Session())

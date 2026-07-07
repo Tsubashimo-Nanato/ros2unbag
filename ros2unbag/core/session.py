@@ -80,7 +80,7 @@ class Session:
 
     def inspect_time(
         self,
-        seconds: float,
+        seconds: float | int,
         *,
         absolute_ns: bool = False,
         progress_factory: ProgressFactory | None = None,

@@ -13,6 +13,7 @@ from ros2unbag.cli.completion import ExportSelectCompleter, Ros2UnbagCompleter
 from ros2unbag.cli.parsing import flag as _flag
 from ros2unbag.cli.parsing import option as _option
 from ros2unbag.cli.parsing import parse_args as _parse_args
+from ros2unbag.cli.parsing import parse_inspect_time
 from ros2unbag.cli.parsing import split_repl_line
 from ros2unbag.cli.progress import progress_task
 from ros2unbag.cli.render import (
@@ -301,12 +302,18 @@ def _handle_inspect(session: Session, args: list[str]) -> None:
     duration_topic = _option(options, "--dur")
     if raw_time is None and duration_topic is None:
         raise ValueError("Usage: inspect --time SECONDS [--dur TOPIC]")
+    absolute_ns = "--absolute-ns" in options
+    inspect_time = (
+        parse_inspect_time(raw_time, absolute_ns=absolute_ns)
+        if raw_time is not None
+        else None
+    )
     if duration_topic is not None:
         render_topic_duration(session.topic_duration(duration_topic, progress_factory=progress_task))
-    if raw_time is not None:
+    if inspect_time is not None:
         target_ns, results, warnings = session.inspect_time(
-            float(raw_time),
-            absolute_ns="--absolute-ns" in options,
+            inspect_time,
+            absolute_ns=absolute_ns,
             progress_factory=progress_task,
         )
         render_inspect_results(target_ns, results, warnings)

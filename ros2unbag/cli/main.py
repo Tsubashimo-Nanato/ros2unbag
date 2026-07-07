@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from ros2unbag.cli.parsing import parse_inspect_time
 from ros2unbag.cli.render import (
     console,
     render_export_result,
@@ -234,7 +235,7 @@ def export_select(
 def inspect_command(
     bag_path: Annotated[Path, typer.Argument(help="Bag folder, .db3 file, or supported bag file.")],
     time: Annotated[
-        float | None,
+        str | None,
         typer.Option("--time", help="Seconds after bag start, unless --absolute-ns is set."),
     ] = None,
     duration_topic: Annotated[
@@ -253,14 +254,23 @@ def inspect_command(
     if time is None and duration_topic is None:
         raise typer.BadParameter("Provide --time SECONDS, --dur TOPIC, or both.")
 
+    try:
+        inspect_time = (
+            parse_inspect_time(time, absolute_ns=absolute_ns)
+            if time is not None
+            else None
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
     session = Session(backend=backend)
     try:
         _open_session_with_progress(session, bag_path)
         if duration_topic is not None:
             render_topic_duration(session.topic_duration(duration_topic, progress_factory=progress_task))
-        if time is not None:
+        if inspect_time is not None:
             target_ns, results, warnings = session.inspect_time(
-                time,
+                inspect_time,
                 absolute_ns=absolute_ns,
                 progress_factory=progress_task,
             )

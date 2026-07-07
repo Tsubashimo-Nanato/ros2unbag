@@ -44,6 +44,20 @@ def parse_args(args: list[str]) -> tuple[list[str], dict[str, str]]:
     return positionals, options
 
 
+def parse_inspect_time(value: str, *, absolute_ns: bool) -> float | int:
+    if absolute_ns:
+        try:
+            return int(value, 10)
+        except ValueError as exc:
+            raise ValueError(
+                "--time must be an integer nanosecond timestamp when --absolute-ns is set"
+            ) from exc
+    try:
+        return float(value)
+    except ValueError as exc:
+        raise ValueError("--time must be a number of seconds") from exc
+
+
 def option(options: dict[str, str], *names: str) -> str | None:
     for name in names:
         if name in options:
