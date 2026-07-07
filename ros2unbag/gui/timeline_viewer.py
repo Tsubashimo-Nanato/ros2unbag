@@ -350,8 +350,11 @@ class TimelineViewer:
         self.rate_box.currentTextChanged.connect(self._on_playback_rate_changed)
         self.theme_toggle = QtWidgets.QCheckBox("Dark mode")
         self.theme_toggle.setObjectName("themeToggle")
-        self.theme_toggle.setToolTip("Switch the GUI between dark and light themes")
-        self.theme_toggle.toggled.connect(lambda checked: self._set_theme("dark" if checked else "light"))
+        self.theme_toggle.setChecked(self._theme == "dark")
+        self.theme_toggle.setToolTip("Switch the GUI between dark and light mode")
+        self.theme_toggle.toggled.connect(
+            lambda checked: self._set_theme("dark" if checked else "light")
+        )
         timeline.addWidget(self.play_button)
         timeline.addWidget(self.step_button)
         timeline.addWidget(self.time_slider, 1)

@@ -491,4 +491,5 @@ Please do not attach private ROS bags or lab data to public issues unless you ha
 
 ## License
 
-This project is released under the MIT License. See [LICENSE](LICENSE).
+This project is released under the GNU Affero General Public License v3.0 or later
+(`AGPL-3.0-or-later`). See [LICENSE](LICENSE).
