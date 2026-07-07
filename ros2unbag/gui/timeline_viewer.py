@@ -28,7 +28,6 @@ from ros2unbag.gui.progress import GuiProgressContext as _GuiProgressContext
 from ros2unbag.gui.renderers import create_point_cloud_renderer
 from ros2unbag.gui.theme import local_changelog_text as _local_changelog_text
 from ros2unbag.gui.theme import normalize_theme as _normalize_theme
-from ros2unbag.gui.theme import system_theme as _system_theme
 from ros2unbag.gui.theme import theme_palette as _theme_palette
 from ros2unbag.gui.theme import theme_stylesheet as _theme_stylesheet
 
@@ -67,12 +66,14 @@ class TimelineViewer:
         self._maximized_pane: Any | None = None
         self._dock_widgets: dict[str, Any] = {}
         self._windows_menu: Any | None = None
+        self._theme_menu: Any | None = None
+        self._theme_actions: dict[str, Any] = {}
         self._next_view_id = 1
         self._playback_rate = 1.0
         self._update_settings = self.QtCore.QSettings("TsubashimoNanato", "ros2unbag")
         self._latest_update_info: UpdateInfo | None = None
         stored_theme = str(self._update_settings.value("ui/theme", "") or "")
-        self._theme = _normalize_theme(stored_theme) if stored_theme else _system_theme(self.QtWidgets)
+        self._theme = _normalize_theme(stored_theme) if stored_theme else "dark"
         self._dock_resize_generations = {"horizontal": 0, "vertical": 0}
         self._autosize_pending = False
         self._background_jobs: list[tuple[Any, Any, Any, Any]] = []
@@ -410,7 +411,23 @@ class TimelineViewer:
         menu.addAction(export_action)
         menu.addSeparator()
         menu.addAction(version_action)
+        self._build_theme_menu(menu_bar)
         self._windows_menu = menu_bar.addMenu("Windows")
+
+    def _build_theme_menu(self, menu_bar: Any) -> None:
+        theme_menu = menu_bar.addMenu("Theme")
+        self._theme_menu = theme_menu
+        theme_group = self.QtGui.QActionGroup(self.window)
+        theme_group.setExclusive(True)
+        bright_action = self.QtGui.QAction("Bright mode", self.window)
+        dark_action = self.QtGui.QAction("Dark mode", self.window)
+        for theme, action in (("light", bright_action), ("dark", dark_action)):
+            action.setCheckable(True)
+            action.triggered.connect(lambda _checked=False, value=theme: self._set_theme(value))
+            theme_group.addAction(action)
+            theme_menu.addAction(action)
+            self._theme_actions[theme] = action
+        self._sync_theme_actions()
 
     def _make_dock(self, title: str, widget: Any, area: Any) -> Any:
         dock = self.QtWidgets.QDockWidget(title, self.window)
@@ -778,10 +795,18 @@ class TimelineViewer:
     def _set_theme(self, theme: str) -> None:
         normalized = _normalize_theme(theme)
         if normalized == self._theme:
+            self._sync_theme_actions()
             return
         self._theme = normalized
         self._update_settings.setValue("ui/theme", normalized)
+        self._sync_theme_actions()
         self._apply_theme()
+
+    def _sync_theme_actions(self) -> None:
+        for theme, action in self._theme_actions.items():
+            action.blockSignals(True)
+            action.setChecked(theme == self._theme)
+            action.blockSignals(False)
 
     def _apply_theme(self) -> None:
         palette = _theme_palette(self._theme)

@@ -19,7 +19,7 @@ if importlib.util.find_spec("PySide6") is None:
     raise unittest.SkipTest("PySide6 is not installed")
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PySide6 import QtGui, QtWidgets  # noqa: E402
+from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 
 class DummyReader:
@@ -56,9 +56,13 @@ class GuiTimelineViewerTests(unittest.TestCase):
         try:
             self.assertEqual(
                 [action.text() for action in viewer.window.menuBar().actions()],
-                ["File", "Windows"],
+                ["File", "Theme", "Windows"],
             )
             self.assertIn("Version...", [action.text() for action in viewer._file_menu.actions()])
+            self.assertEqual(
+                [action.text() for action in viewer._theme_menu.actions()],
+                ["Bright mode", "Dark mode"],
+            )
             self.assertEqual(
                 list(viewer._dock_widgets),
                 ["Topic list", "Main view", "Lane line overlay", "Properties", "Output"],
@@ -153,6 +157,37 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertIn("#edf0f3", viewer.window.styleSheet())
         finally:
             viewer.window.close()
+
+    def test_theme_menu_switches_modes(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer._theme_actions["light"].trigger()
+            self.assertEqual(viewer._theme, "light")
+            self.assertTrue(viewer._theme_actions["light"].isChecked())
+            self.assertFalse(viewer._theme_actions["dark"].isChecked())
+
+            viewer._theme_actions["dark"].trigger()
+            self.assertEqual(viewer._theme, "dark")
+            self.assertFalse(viewer._theme_actions["light"].isChecked())
+            self.assertTrue(viewer._theme_actions["dark"].isChecked())
+        finally:
+            viewer.window.close()
+
+    def test_default_theme_is_dark_without_saved_preference(self) -> None:
+        settings = QtCore.QSettings("TsubashimoNanato", "ros2unbag")
+        previous = settings.value("ui/theme", "")
+        settings.remove("ui/theme")
+        viewer = TimelineViewer()
+        try:
+            self.assertEqual(viewer._theme, "dark")
+            self.assertTrue(viewer._theme_actions["dark"].isChecked())
+            self.assertIn("#101010", viewer.window.styleSheet())
+        finally:
+            viewer.window.close()
+            if previous:
+                settings.setValue("ui/theme", previous)
+            else:
+                settings.remove("ui/theme")
 
     def test_update_check_starts_background_job(self) -> None:
         viewer = TimelineViewer()
