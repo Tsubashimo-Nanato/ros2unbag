@@ -63,6 +63,8 @@ class GuiTimelineViewerTests(unittest.TestCase):
                 [action.text() for action in viewer._theme_menu.actions()],
                 ["Bright mode", "Dark mode"],
             )
+            self.assertEqual(viewer.theme_toggle.text(), "Dark mode")
+            self.assertEqual(viewer.theme_toggle.objectName(), "themeToggle")
             self.assertEqual(
                 list(viewer._dock_widgets),
                 ["Topic list", "Main view", "Lane line overlay", "Properties", "Output"],
@@ -251,11 +253,26 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertIn("#101010", viewer.window.styleSheet())
             self.assertIn("QHeaderView::section", self.app.styleSheet())
             self.assertIn("QWidget#propertiesPanel", self.app.styleSheet())
+            self.assertTrue(viewer.theme_toggle.isChecked())
 
             viewer._set_theme("light")
             self.assertEqual(viewer._theme, "light")
             self.assertIn("#edf0f3", viewer.window.styleSheet())
             self.assertIn("QTreeWidget::indicator", viewer.window.styleSheet())
+            self.assertFalse(viewer.theme_toggle.isChecked())
+        finally:
+            viewer.window.close()
+
+    def test_theme_toggle_switches_gui_theme(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer._set_theme("light")
+
+            viewer.theme_toggle.click()
+            self.assertEqual(viewer._theme, "dark")
+
+            viewer.theme_toggle.click()
+            self.assertEqual(viewer._theme, "light")
         finally:
             viewer.window.close()
 
@@ -302,6 +319,18 @@ class GuiTimelineViewerTests(unittest.TestCase):
 
             self.assertEqual(len(calls), 1)
             self.assertEqual(calls[0]["title"], "Checking for updates")
+        finally:
+            viewer.window.close()
+
+    def test_version_action_ignores_qt_checked_argument(self) -> None:
+        viewer = TimelineViewer()
+        calls = []
+        try:
+            viewer._show_version_dialog = lambda: calls.append("opened")  # type: ignore[method-assign]
+
+            viewer._on_version_action_triggered(False)
+
+            self.assertEqual(calls, ["opened"])
         finally:
             viewer.window.close()
 
