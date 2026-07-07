@@ -239,6 +239,37 @@ class TimelineViewer:
         self.topic_tree.itemSelectionChanged.connect(self._on_topic_selection_changed)
         self.topic_tree.itemDoubleClicked.connect(self._on_topic_double_clicked)
         self.topic_tree.setMinimumWidth(260)
+        self.topic_tree.setRootIsDecorated(True)
+        self.topic_tree.setItemsExpandable(True)
+        self.topic_tree.setExpandsOnDoubleClick(True)
+        self.topic_tree.setIndentation(18)
+        self.topic_tree.setUniformRowHeights(True)
+
+        self.topic_panel = QtWidgets.QWidget()
+        self.topic_panel.setObjectName("topicPanel")
+        topic_layout = QtWidgets.QVBoxLayout(self.topic_panel)
+        topic_layout.setContentsMargins(8, 8, 8, 8)
+        topic_layout.setSpacing(6)
+        topic_toolbar = QtWidgets.QHBoxLayout()
+        topic_toolbar.setContentsMargins(0, 0, 0, 0)
+        topic_toolbar.setSpacing(6)
+        self.topic_search = QtWidgets.QLineEdit()
+        self.topic_search.setPlaceholderText("Search topics")
+        self.topic_search.setClearButtonEnabled(True)
+        self.topic_search.textChanged.connect(self._filter_topic_tree)
+        self.topic_expand_button = QtWidgets.QToolButton()
+        self.topic_expand_button.setText("Expand")
+        self.topic_expand_button.setToolTip("Expand all topic groups")
+        self.topic_expand_button.clicked.connect(self._expand_topic_tree)
+        self.topic_collapse_button = QtWidgets.QToolButton()
+        self.topic_collapse_button.setText("Collapse")
+        self.topic_collapse_button.setToolTip("Collapse all topic groups")
+        self.topic_collapse_button.clicked.connect(self._collapse_topic_tree)
+        topic_toolbar.addWidget(self.topic_search, 1)
+        topic_toolbar.addWidget(self.topic_expand_button)
+        topic_toolbar.addWidget(self.topic_collapse_button)
+        topic_layout.addLayout(topic_toolbar)
+        topic_layout.addWidget(self.topic_tree, 1)
 
         self.view_grid_widget = QtWidgets.QWidget()
         self.view_grid_widget.setObjectName("viewGrid")
@@ -355,7 +386,7 @@ class TimelineViewer:
 
         self.topic_dock = self._make_dock(
             "Topic list",
-            self.topic_tree,
+            self.topic_panel,
             QtCore.Qt.DockWidgetArea.LeftDockWidgetArea,
         )
         self.main_view_dock = self._make_dock(
@@ -627,9 +658,17 @@ class TimelineViewer:
     def _populate_topics(self) -> None:
         self.topic_tree.clear()
         self._topic_by_item.clear()
+        if hasattr(self, "topic_search"):
+            self.topic_search.clear()
         topics = self._topic_snapshot()
         self._topic_info_by_name = {topic.name: topic for topic in topics}
         nodes: dict[tuple[str, ...], Any] = {}
+        folder_icon = self.window.style().standardIcon(
+            self.QtWidgets.QStyle.StandardPixmap.SP_DirIcon
+        )
+        topic_icon = self.window.style().standardIcon(
+            self.QtWidgets.QStyle.StandardPixmap.SP_FileIcon
+        )
         for topic in topics:
             parts = [part for part in topic.name.split("/") if part]
             parent = None
@@ -646,7 +685,15 @@ class TimelineViewer:
                     flags = item.flags()
                     if is_leaf:
                         flags |= self.QtCore.Qt.ItemFlag.ItemIsDragEnabled
+                        item.setIcon(0, topic_icon)
                         item.setData(0, self.QtCore.Qt.ItemDataRole.UserRole, topic.name)
+                    else:
+                        flags &= ~self.QtCore.Qt.ItemFlag.ItemIsDragEnabled
+                        flags &= ~self.QtCore.Qt.ItemFlag.ItemIsSelectable
+                        item.setIcon(0, folder_icon)
+                        font = item.font(0)
+                        font.setBold(True)
+                        item.setFont(0, font)
                     item.setFlags(flags)
                     if parent is None:
                         self.topic_tree.addTopLevelItem(item)
@@ -660,7 +707,62 @@ class TimelineViewer:
                 parent.setData(0, self.QtCore.Qt.ItemDataRole.UserRole, topic.name)
                 self._topic_by_item[id(parent)] = topic.name
         self.topic_tree.collapseAll()
+        self._apply_topic_tree_item_styles()
         self._autosize_topic_columns()
+
+    def _apply_topic_tree_item_styles(self) -> None:
+        palette = _theme_palette(self._theme)
+        muted_brush = self.QtGui.QBrush(self.QtGui.QColor(palette["muted"]))
+        text_brush = self.QtGui.QBrush(self.QtGui.QColor(palette["text"]))
+        for index in range(self.topic_tree.topLevelItemCount()):
+            self._apply_topic_tree_item_style(
+                self.topic_tree.topLevelItem(index),
+                text_brush,
+                muted_brush,
+            )
+
+    def _apply_topic_tree_item_style(
+        self,
+        item: Any,
+        text_brush: Any,
+        muted_brush: Any,
+    ) -> None:
+        is_topic = id(item) in self._topic_by_item
+        font = item.font(0)
+        font.setBold(not is_topic)
+        item.setFont(0, font)
+        item.setForeground(0, text_brush)
+        item.setForeground(1, text_brush if is_topic else muted_brush)
+        item.setForeground(2, text_brush if is_topic else muted_brush)
+        for index in range(item.childCount()):
+            self._apply_topic_tree_item_style(item.child(index), text_brush, muted_brush)
+
+    def _expand_topic_tree(self) -> None:
+        self.topic_tree.expandAll()
+
+    def _collapse_topic_tree(self) -> None:
+        self.topic_search.clear()
+        self.topic_tree.collapseAll()
+
+    def _filter_topic_tree(self, text: str) -> None:
+        query = text.strip().lower()
+        for index in range(self.topic_tree.topLevelItemCount()):
+            item = self.topic_tree.topLevelItem(index)
+            self._filter_topic_item(item, query)
+
+    def _filter_topic_item(self, item: Any, query: str) -> bool:
+        topic = item.data(0, self.QtCore.Qt.ItemDataRole.UserRole)
+        searchable = str(topic or item.text(0)).lower()
+        self_matches = not query or query in searchable
+        child_matches = False
+        for index in range(item.childCount()):
+            if self._filter_topic_item(item.child(index), query):
+                child_matches = True
+        visible = self_matches or child_matches
+        item.setHidden(not visible)
+        if query:
+            item.setExpanded(child_matches)
+        return visible
 
     def _autosize_topic_columns(self) -> None:
         widths = self._preferred_topic_column_widths()
@@ -845,6 +947,8 @@ class TimelineViewer:
             pane.apply_theme(palette)
         if hasattr(self, "lane_overlay"):
             self.lane_overlay.apply_theme(palette)
+        if hasattr(self, "topic_tree"):
+            self._apply_topic_tree_item_styles()
 
     def _request_preview_update(self) -> None:
         if self.play_timer.isActive():

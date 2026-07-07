@@ -90,6 +90,7 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
         QWidget#mainPanel, QWidget#viewGrid {{
             background: {palette['viewer_bg']};
         }}
+        QWidget#topicPanel,
         QWidget#propertiesPanel, QWidget#propertiesViewport, QScrollArea#propertiesScroll,
         QWidget#outputPanel {{
             background: {palette['panel']};
@@ -119,6 +120,7 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
         QTreeWidget {{
             alternate-background-color: {palette['panel_alt']};
             show-decoration-selected: 1;
+            outline: 0;
         }}
         QHeaderView::section {{
             background: {palette['panel_alt']};
@@ -129,11 +131,28 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
             padding: 4px 6px;
         }}
         QTreeWidget::branch {{
-            background: {palette['input']};
+            background: transparent;
         }}
         QTreeWidget::item:selected {{
             background: {palette['accent']};
             color: {palette['highlight_text']};
+        }}
+        QTreeWidget::item:hover {{
+            background: {palette['button_hover']};
+        }}
+        QTreeWidget::indicator {{
+            width: 14px;
+            height: 14px;
+            border: 1px solid {palette['border']};
+            border-radius: 3px;
+            background: {palette['panel_alt']};
+        }}
+        QTreeWidget::indicator:unchecked:hover {{
+            border-color: {palette['accent']};
+        }}
+        QTreeWidget::indicator:checked {{
+            background: {palette['accent']};
+            border-color: {palette['accent']};
         }}
         QCheckBox {{
             background: transparent;

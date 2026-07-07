@@ -92,6 +92,106 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
+    def test_topic_panel_exposes_search_and_fold_controls(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            self.assertEqual(viewer.topic_search.placeholderText(), "Search topics")
+            self.assertEqual(viewer.topic_expand_button.text(), "Expand")
+            self.assertEqual(viewer.topic_collapse_button.text(), "Collapse")
+            self.assertIs(viewer.topic_dock.widget(), viewer.topic_panel)
+        finally:
+            viewer.window.close()
+
+    def test_topic_tree_distinguishes_groups_from_topic_leaves(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [
+                TopicInfo(
+                    name="/aiformula/camera/image_raw",
+                    msgtype="sensor_msgs/msg/Image",
+                    category="image",
+                )
+            ]
+            viewer._populate_topics()
+
+            root = viewer.topic_tree.topLevelItem(0)
+            camera = root.child(0)
+            leaf = camera.child(0)
+
+            self.assertTrue(root.font(0).bold())
+            self.assertFalse(root.flags() & QtCore.Qt.ItemFlag.ItemIsSelectable)
+            self.assertTrue(leaf.flags() & QtCore.Qt.ItemFlag.ItemIsSelectable)
+            self.assertTrue(leaf.flags() & QtCore.Qt.ItemFlag.ItemIsDragEnabled)
+            self.assertEqual(
+                leaf.data(0, QtCore.Qt.ItemDataRole.UserRole),
+                "/aiformula/camera/image_raw",
+            )
+        finally:
+            viewer.window.close()
+
+    def test_topic_search_filters_to_matching_topic_path(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [
+                TopicInfo(
+                    name="/aiformula/camera/image_raw",
+                    msgtype="sensor_msgs/msg/Image",
+                    category="image",
+                ),
+                TopicInfo(
+                    name="/aiformula/imu",
+                    msgtype="sensor_msgs/msg/Imu",
+                    category="unknown_raw",
+                ),
+                TopicInfo(
+                    name="/vehicle/points",
+                    msgtype="sensor_msgs/msg/PointCloud2",
+                    category="point_cloud",
+                ),
+            ]
+            viewer._populate_topics()
+
+            viewer.topic_search.setText("camera")
+
+            aiformula = _tree_item(viewer.topic_tree, "aiformula")
+            camera = _tree_item(viewer.topic_tree, "camera")
+            imu = _tree_item(viewer.topic_tree, "imu")
+            vehicle = _tree_item(viewer.topic_tree, "vehicle")
+            self.assertFalse(aiformula.isHidden())
+            self.assertFalse(camera.isHidden())
+            self.assertTrue(imu.isHidden())
+            self.assertTrue(vehicle.isHidden())
+            self.assertTrue(aiformula.isExpanded())
+        finally:
+            viewer.window.close()
+
+    def test_topic_expand_and_collapse_buttons_control_tree(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [
+                TopicInfo(
+                    name="/aiformula/camera/image_raw",
+                    msgtype="sensor_msgs/msg/Image",
+                    category="image",
+                )
+            ]
+            viewer._populate_topics()
+            root = viewer.topic_tree.topLevelItem(0)
+
+            viewer.topic_expand_button.click()
+            self.assertTrue(root.isExpanded())
+
+            viewer.topic_search.setText("camera")
+            viewer.topic_collapse_button.click()
+            self.assertEqual(viewer.topic_search.text(), "")
+            self.assertFalse(root.isExpanded())
+            self.assertFalse(root.isHidden())
+        finally:
+            viewer.window.close()
+
     def test_central_spacer_is_collapsed_for_dock_layout(self) -> None:
         viewer = TimelineViewer()
         try:
@@ -155,6 +255,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
             viewer._set_theme("light")
             self.assertEqual(viewer._theme, "light")
             self.assertIn("#edf0f3", viewer.window.styleSheet())
+            self.assertIn("QTreeWidget::indicator", viewer.window.styleSheet())
         finally:
             viewer.window.close()
 
@@ -367,6 +468,27 @@ def _lane_overlay_data() -> LaneOverlayData:
             for role in ("center", "left", "right")
         }
     )
+
+
+def _tree_item(tree: QtWidgets.QTreeWidget, text: str) -> QtWidgets.QTreeWidgetItem:
+    for index in range(tree.topLevelItemCount()):
+        found = _tree_item_from(tree.topLevelItem(index), text)
+        if found is not None:
+            return found
+    raise AssertionError(f"Tree item not found: {text}")
+
+
+def _tree_item_from(
+    item: QtWidgets.QTreeWidgetItem,
+    text: str,
+) -> QtWidgets.QTreeWidgetItem | None:
+    if item.text(0) == text:
+        return item
+    for index in range(item.childCount()):
+        found = _tree_item_from(item.child(index), text)
+        if found is not None:
+            return found
+    return None
 
 
 if __name__ == "__main__":
