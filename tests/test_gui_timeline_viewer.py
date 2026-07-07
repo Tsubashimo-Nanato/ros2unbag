@@ -63,6 +63,20 @@ class GuiTimelineViewerTests(unittest.TestCase):
             )
             for dock in viewer._dock_widgets.values():
                 self.assertTrue(dock.toggleViewAction().isCheckable())
+            self.assertEqual(viewer.theme_toggle.text(), "Dark mode")
+            self.assertEqual(viewer.theme_toggle.objectName(), "themeToggle")
+        finally:
+            viewer.window.close()
+
+    def test_version_action_ignores_qt_checked_argument(self) -> None:
+        viewer = TimelineViewer()
+        calls = []
+        try:
+            viewer._show_version_dialog = lambda: calls.append("opened")  # type: ignore[method-assign]
+
+            viewer._on_version_action_triggered(False)
+
+            self.assertEqual(calls, ["opened"])
         finally:
             viewer.window.close()
 
@@ -142,13 +156,26 @@ class GuiTimelineViewerTests(unittest.TestCase):
         try:
             viewer._set_theme("dark")
             self.assertEqual(viewer._theme, "dark")
+            self.assertTrue(viewer.theme_toggle.isChecked())
             self.assertIn("#101010", viewer.window.styleSheet())
             self.assertIn("QHeaderView::section", self.app.styleSheet())
             self.assertIn("QWidget#propertiesPanel", self.app.styleSheet())
 
             viewer._set_theme("light")
             self.assertEqual(viewer._theme, "light")
+            self.assertFalse(viewer.theme_toggle.isChecked())
             self.assertIn("#edf0f3", viewer.window.styleSheet())
+        finally:
+            viewer.window.close()
+
+    def test_theme_toggle_switches_gui_theme(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.theme_toggle.setChecked(True)
+            self.assertEqual(viewer._theme, "dark")
+
+            viewer.theme_toggle.setChecked(False)
+            self.assertEqual(viewer._theme, "light")
         finally:
             viewer.window.close()
 

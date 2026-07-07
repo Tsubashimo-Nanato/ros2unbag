@@ -296,6 +296,13 @@ class TimelineViewer:
         self.rate_box.setCurrentText("1x")
         self.rate_box.setMaximumWidth(90)
         self.rate_box.currentTextChanged.connect(self._on_playback_rate_changed)
+        self.theme_toggle = QtWidgets.QCheckBox("Dark mode")
+        self.theme_toggle.setObjectName("themeToggle")
+        self.theme_toggle.setChecked(self._theme == "dark")
+        self.theme_toggle.setToolTip("Switch the GUI between dark and light mode")
+        self.theme_toggle.toggled.connect(
+            lambda checked: self._set_theme("dark" if checked else "light")
+        )
         timeline.addWidget(self.play_button)
         timeline.addWidget(self.step_button)
         timeline.addWidget(self.time_slider, 1)
@@ -303,6 +310,7 @@ class TimelineViewer:
         timeline.addWidget(self.time_input)
         timeline.addWidget(QtWidgets.QLabel("Rate"))
         timeline.addWidget(self.rate_box)
+        timeline.addWidget(self.theme_toggle)
         main_layout.addWidget(timeline_group)
 
         output_panel = QtWidgets.QWidget()
@@ -372,12 +380,15 @@ class TimelineViewer:
         self._file_actions = [import_action, export_action, version_action]
         import_action.triggered.connect(self._import_bag)
         export_action.triggered.connect(self._show_export_dialog)
-        version_action.triggered.connect(self._show_version_dialog)
+        version_action.triggered.connect(self._on_version_action_triggered)
         menu.addAction(import_action)
         menu.addAction(export_action)
         menu.addSeparator()
         menu.addAction(version_action)
         self._windows_menu = menu_bar.addMenu("Windows")
+
+    def _on_version_action_triggered(self, _checked: bool = False) -> None:
+        self._show_version_dialog()
 
     def _make_dock(self, title: str, widget: Any, area: Any) -> Any:
         dock = self.QtWidgets.QDockWidget(title, self.window)
@@ -680,6 +691,7 @@ class TimelineViewer:
     def _set_theme(self, theme: str) -> None:
         normalized = _normalize_theme(theme)
         if normalized == self._theme:
+            self._sync_theme_toggle()
             return
         self._theme = normalized
         self._update_settings.setValue("ui/theme", normalized)
@@ -720,6 +732,14 @@ class TimelineViewer:
         self.window.setStyleSheet(stylesheet)
         for pane in self._all_panes():
             pane.apply_theme(palette)
+        self._sync_theme_toggle()
+
+    def _sync_theme_toggle(self) -> None:
+        if not hasattr(self, "theme_toggle"):
+            return
+        self.theme_toggle.blockSignals(True)
+        self.theme_toggle.setChecked(self._theme == "dark")
+        self.theme_toggle.blockSignals(False)
 
     def _request_preview_update(self) -> None:
         if self.play_timer.isActive():
@@ -847,6 +867,8 @@ class TimelineViewer:
         return "check"
 
     def _show_version_dialog(self, update_info: UpdateInfo | None = None) -> None:
+        if isinstance(update_info, bool):
+            update_info = None
         dialog = self.QtWidgets.QDialog(self.window)
         dialog.setWindowTitle("ros2unbag version")
         dialog.resize(720, 560)
