@@ -394,6 +394,83 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
+    def test_lane_plot_zoom_pan_and_reset_view_bounds(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.lane_overlay.set_topics({
+                "center": _lane_topic("center"),
+                "left": _lane_topic("left"),
+                "right": _lane_topic("right"),
+            })
+            viewer.lane_overlay.set_data(_lane_overlay_data())
+            viewer.lane_overlay.show_at_timestamp(100)
+            plot = viewer.lane_overlay.plot
+            plot.resize(480, 320)
+            original = plot._view_bounds
+            self.assertIsNotNone(original)
+
+            plot._zoom_at_plot_position(QtCore.QPointF(240.0, 160.0), 120)
+            zoomed = plot._view_bounds
+            self.assertIsNotNone(zoomed)
+            self.assertLess(zoomed.max_x - zoomed.min_x, original.max_x - original.min_x)
+            self.assertLess(zoomed.max_y - zoomed.min_y, original.max_y - original.min_y)
+
+            plot._pan_start_bounds = zoomed
+            plot._pan_view_by_pixels(40.0, -20.0)
+            panned = plot._view_bounds
+            self.assertIsNotNone(panned)
+            self.assertNotEqual(panned.min_x, zoomed.min_x)
+            self.assertNotEqual(panned.min_y, zoomed.min_y)
+
+            plot.reset_view()
+            self.assertEqual(plot._view_bounds, original)
+        finally:
+            viewer.window.close()
+
+    def test_lane_plot_swap_xy_changes_axes_and_bounds(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.lane_overlay.set_topics({
+                "center": _lane_topic("center"),
+                "left": _lane_topic("left"),
+                "right": _lane_topic("right"),
+            })
+            viewer.lane_overlay.set_data(_lane_overlay_data())
+            normal = viewer.lane_overlay.plot._view_bounds
+            self.assertIsNotNone(normal)
+
+            viewer.lane_overlay.plot.set_swap_xy(True)
+            swapped = viewer.lane_overlay.plot._view_bounds
+
+            self.assertEqual(viewer.lane_overlay.plot._axis_labels(), ("y", "x"))
+            self.assertIsNotNone(swapped)
+            self.assertEqual(swapped.min_x, normal.min_y)
+            self.assertEqual(swapped.max_x, normal.max_y)
+            self.assertEqual(swapped.min_y, normal.min_x)
+            self.assertEqual(swapped.max_y, normal.max_x)
+        finally:
+            viewer.window.close()
+
+    def test_lane_xy_controls_sync_overlay_and_view_pane(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topics = {role: _lane_topic(role) for role in ("center", "left", "right")}
+            viewer._bag_start_ns = 0
+            viewer._lane_overlay_data = _lane_overlay_data()
+            viewer.lane_overlay.set_topics(topics)
+            viewer.lane_overlay.set_data(viewer._lane_overlay_data)
+            pane = viewer._panes[0]
+            pane.set_topic(topics["center"].name, topics["center"])
+
+            viewer.lane_overlay.swap_axes_button.click()
+
+            self.assertTrue(viewer._lane_swap_xy)
+            self.assertTrue(viewer.lane_overlay.plot.swap_xy)
+            self.assertTrue(pane.xy_button.isChecked())
+            self.assertTrue(pane.lane_plot.swap_xy)
+        finally:
+            viewer.window.close()
+
     def test_lane_topic_render_uses_lane_plot_without_image_warning(self) -> None:
         viewer = TimelineViewer()
         warnings: list[str] = []

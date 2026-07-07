@@ -82,6 +82,7 @@ class TimelineViewer:
         self._lane_topics_by_role: dict[str, TopicInfo] = {}
         self._lane_overlay_data: LaneOverlayData | None = None
         self._lane_load_generation = 0
+        self._lane_swap_xy = False
 
         self.window = _create_drop_window(self.QtWidgets, self.QtCore, self.open_bag)
         self.window.setWindowTitle("ros2unbag Timeline Viewer")
@@ -375,6 +376,7 @@ class TimelineViewer:
         self.lane_overlay = self.LaneOverlayPanel(
             self.window,
             on_selection_changed=self._on_lane_overlay_selection_changed,
+            on_axes_changed=self._set_lane_swap_xy,
         )
 
         self.preview_timer = QtCore.QTimer()
@@ -819,6 +821,14 @@ class TimelineViewer:
         for pane in self._all_panes():
             if pane.is_lane_topic():
                 pane.show_at_timestamp(timestamp_ns)
+
+    def _set_lane_swap_xy(self, swapped: bool) -> None:
+        self._lane_swap_xy = swapped
+        if hasattr(self, "lane_overlay"):
+            self.lane_overlay.set_swap_xy(swapped)
+        for pane in self._all_panes():
+            pane.set_lane_swap_xy(swapped)
+        self._refresh_lane_view_panes()
 
     def _autosize_topic_columns(self) -> None:
         widths = self._preferred_topic_column_widths()
@@ -1667,6 +1677,11 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.title_label.setObjectName("viewTitle")
             self.render_button = QtWidgets.QToolButton()
             self.render_button.setText("Render")
+            self.xy_button = QtWidgets.QToolButton()
+            self.xy_button.setText("XY")
+            self.xy_button.setCheckable(True)
+            self.xy_button.setEnabled(False)
+            self.xy_button.setToolTip("Swap x/y axes for lane line plots")
             self.max_button = QtWidgets.QToolButton()
             self.max_button.setText("Max")
             self.pop_button = QtWidgets.QToolButton()
@@ -1675,6 +1690,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.delete_button.setText("X")
             top_bar.addWidget(self.title_label, 1)
             top_bar.addWidget(self.render_button)
+            top_bar.addWidget(self.xy_button)
             top_bar.addWidget(self.max_button)
             top_bar.addWidget(self.pop_button)
             top_bar.addWidget(self.delete_button)
@@ -1697,6 +1713,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             layout.addWidget(self.stack, 1)
 
             self.render_button.clicked.connect(lambda: self.ensure_rendered_for_playback())
+            self.xy_button.toggled.connect(self._on_xy_toggled)
             self.max_button.clicked.connect(lambda: self.owner.toggle_maximize_pane(self))
             self.pop_button.clicked.connect(lambda: self.owner.popout_pane(self))
             self.delete_button.clicked.connect(lambda: self.owner.delete_pane(self))
@@ -1727,6 +1744,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.image_label.setText("Drop an image topic or select a topic.")
             self.lane_plot.set_data(None)
             self.lane_plot.set_visible_roles(())
+            self.xy_button.setEnabled(False)
+            self.set_lane_swap_xy(False)
             self.raw_text.clear()
 
         def set_topic(self, topic: str, topic_info: TopicInfo) -> None:
@@ -1740,6 +1759,9 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self._refresh_title()
             self.title_label.setToolTip(topic)
             self.raw_text.setPlainText(f"{topic}\n{topic_info.msgtype}\n{topic_info.category}")
+            is_lane = self.is_lane_topic()
+            self.xy_button.setEnabled(is_lane)
+            self.set_lane_swap_xy(self.owner._lane_swap_xy if is_lane else False)
 
         def _refresh_title(self) -> None:
             if self.topic is None:
@@ -1758,6 +1780,16 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             if self.topic_info is None:
                 return False
             return lane_role_for_topic(self.topic_info) is not None
+
+        def set_lane_swap_xy(self, swapped: bool) -> None:
+            effective = swapped if self.is_lane_topic() else False
+            self.xy_button.blockSignals(True)
+            self.xy_button.setChecked(effective)
+            self.xy_button.blockSignals(False)
+            self.lane_plot.set_swap_xy(effective)
+
+        def _on_xy_toggled(self, checked: bool) -> None:
+            self.owner._set_lane_swap_xy(checked)
 
         def ensure_rendered_for_playback(self) -> bool:
             if self.topic is None or self.topic_info is None:
