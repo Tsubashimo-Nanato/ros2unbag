@@ -90,6 +90,20 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
         QWidget#mainPanel, QWidget#viewGrid {{
             background: {palette['viewer_bg']};
         }}
+        QWidget#mainViewTitleBar {{
+            background: {palette['panel']};
+            border-bottom: 1px solid {palette['border']};
+        }}
+        QLabel#mainViewTitle {{
+            color: {palette['text']};
+            font-weight: 600;
+        }}
+        QToolButton#splitViewButton {{
+            min-width: 22px;
+            max-width: 22px;
+            padding: 2px;
+            font-weight: 700;
+        }}
         QWidget#topicPanel,
         QWidget#propertiesPanel, QWidget#propertiesViewport, QScrollArea#propertiesScroll,
         QWidget#outputPanel {{

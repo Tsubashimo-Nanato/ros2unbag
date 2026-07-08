@@ -35,6 +35,7 @@ from ros2unbag.gui.theme import theme_stylesheet as _theme_stylesheet
 
 
 TOPIC_MIME = "application/x-ros2unbag-topic"
+TOPICS_MIME = "application/x-ros2unbag-topics"
 IMAGE_CATEGORIES = {"image", "compressed_image", "mask_candidate"}
 
 
@@ -146,10 +147,83 @@ class TimelineViewer:
         self._apply_topic_settings(topic)
         self._request_preview_update()
 
-    def split_pane(self, pane: Any, direction: str) -> None:
+    def assign_topics_to_pane(self, pane: Any, topics: list[str]) -> None:
+        valid_topics = self._valid_drop_topics(topics)
+        if not valid_topics:
+            return
+        groups = self._drop_topic_groups(valid_topics)
+        target_pane = pane
+        for index, group in enumerate(groups):
+            if index > 0:
+                next_pane = self.split_pane(target_pane, "horizontal")
+                if next_pane is None:
+                    return
+                target_pane = next_pane
+            self._assign_topic_group_to_pane(target_pane, group)
+
+    def _valid_drop_topics(self, topics: list[str]) -> list[str]:
+        valid_topics: list[str] = []
+        seen: set[str] = set()
+        for topic in topics:
+            if topic in seen:
+                continue
+            seen.add(topic)
+            if topic not in self._topic_info_by_name:
+                self._log(f"Topic not found: {topic}")
+                continue
+            valid_topics.append(topic)
+        return valid_topics
+
+    def _drop_topic_groups(self, topics: list[str]) -> list[list[str]]:
+        groups: list[list[str]] = []
+        lane_group: list[str] | None = None
+        point_cloud_group: list[str] | None = None
+        for topic in topics:
+            info = self._topic_info_by_name[topic]
+            if lane_role_for_topic(info) is not None:
+                if lane_group is None:
+                    lane_group = []
+                    groups.append(lane_group)
+                lane_group.append(topic)
+                continue
+            if info.category == "point_cloud":
+                if point_cloud_group is None:
+                    point_cloud_group = []
+                    groups.append(point_cloud_group)
+                point_cloud_group.append(topic)
+                continue
+            groups.append([topic])
+        return groups
+
+    def _assign_topic_group_to_pane(self, pane: Any, topics: list[str]) -> None:
+        if not topics:
+            return
+        if self._all_lane_topics(topics):
+            self._set_checked_topics(topics)
+            topic = self._preferred_lane_anchor(topics)
+            self.assign_topic_to_pane(pane, topic)
+            self._refresh_lane_view_panes()
+            return
+        self.assign_topic_to_pane(pane, topics[0])
+
+    def _all_lane_topics(self, topics: list[str]) -> bool:
+        return all(
+            lane_role_for_topic(self._topic_info_by_name[topic]) is not None
+            for topic in topics
+        )
+
+    def _preferred_lane_anchor(self, topics: list[str]) -> str:
+        for role in LANE_ROLES:
+            for topic in topics:
+                info = self._topic_info_by_name[topic]
+                if lane_role_for_topic(info) == role:
+                    return topic
+        return topics[0]
+
+    def split_pane(self, pane: Any, direction: str) -> Any | None:
         if len(self._panes) >= 16:
             self._show_warning("The viewer grid is limited to 4x4 panes.")
-            return
+            return None
         if direction == "horizontal" and self._grid_cols < 4:
             self._grid_cols += 1
         elif direction == "vertical" and self._grid_rows < 4:
@@ -160,12 +234,13 @@ class TimelineViewer:
             self._grid_cols += 1
         else:
             self._show_warning("The viewer grid is limited to 4x4 panes.")
-            return
+            return None
 
         new_pane = self._new_pane()
         insert_at = self._panes.index(pane) + 1 if pane in self._panes else len(self._panes)
         self._panes.insert(insert_at, new_pane)
         self._layout_panes()
+        return new_pane
 
     def toggle_maximize_pane(self, pane: Any) -> None:
         if self._maximized_pane is pane:
@@ -269,9 +344,14 @@ class TimelineViewer:
         self.topic_collapse_button.setText("Collapse")
         self.topic_collapse_button.setToolTip("Collapse all topic groups")
         self.topic_collapse_button.clicked.connect(self._collapse_topic_tree)
+        self.topic_uncheck_button = QtWidgets.QToolButton()
+        self.topic_uncheck_button.setText("Uncheck all")
+        self.topic_uncheck_button.setToolTip("Clear all checked topics")
+        self.topic_uncheck_button.clicked.connect(self._uncheck_topic_tree)
         topic_toolbar.addWidget(self.topic_search, 1)
         topic_toolbar.addWidget(self.topic_expand_button)
         topic_toolbar.addWidget(self.topic_collapse_button)
+        topic_toolbar.addWidget(self.topic_uncheck_button)
         topic_layout.addLayout(topic_toolbar)
         topic_layout.addWidget(self.topic_tree, 1)
 
@@ -407,6 +487,7 @@ class TimelineViewer:
             self.main_panel,
             QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
         )
+        self._install_main_view_titlebar()
         self.lane_overlay_dock = self._make_dock(
             "Lane line overlay",
             self.lane_overlay,
@@ -499,6 +580,50 @@ class TimelineViewer:
             self._windows_menu.addAction(action)
         dock.visibilityChanged.connect(lambda _visible: self._queue_autosize_docks())
         return dock
+
+    def _install_main_view_titlebar(self) -> None:
+        QtCore = self.QtCore
+        QtWidgets = self.QtWidgets
+
+        class DockTitleBar(QtWidgets.QWidget):
+            def mousePressEvent(self, event: Any) -> None:
+                event.ignore()
+
+            def mouseMoveEvent(self, event: Any) -> None:
+                event.ignore()
+
+            def mouseReleaseEvent(self, event: Any) -> None:
+                event.ignore()
+
+            def mouseDoubleClickEvent(self, event: Any) -> None:
+                event.ignore()
+
+        title_bar = DockTitleBar(self.main_view_dock)
+        title_bar.setObjectName("mainViewTitleBar")
+        layout = QtWidgets.QHBoxLayout(title_bar)
+        layout.setContentsMargins(6, 2, 4, 2)
+        layout.setSpacing(6)
+        self.main_view_title = QtWidgets.QLabel("View 1", title_bar)
+        self.main_view_title.setObjectName("mainViewTitle")
+        self.main_view_title.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents,
+            True,
+        )
+        self.split_view_button = QtWidgets.QToolButton(title_bar)
+        self.split_view_button.setObjectName("splitViewButton")
+        self.split_view_button.setText("+")
+        self.split_view_button.setToolTip("Split screen")
+        self.split_view_button.clicked.connect(self._split_active_view)
+        layout.addWidget(self.main_view_title, 1)
+        layout.addWidget(self.split_view_button)
+        self.main_view_dock.setTitleBarWidget(title_bar)
+
+    def _split_active_view(self) -> None:
+        pane = self._active_pane if self._active_pane in self._panes else None
+        if pane is None and self._panes:
+            pane = self._panes[0]
+        if pane is not None:
+            self.split_pane(pane, "horizontal")
 
     def _new_pane(self, parent: Any | None = None) -> Any:
         pane = self.TopicViewPane(self, parent)
@@ -706,8 +831,8 @@ class TimelineViewer:
                             item.setIcon(0, topic_icon)
                             item.setData(0, self.QtCore.Qt.ItemDataRole.UserRole, topic.name)
                         else:
-                            flags &= ~self.QtCore.Qt.ItemFlag.ItemIsDragEnabled
-                            flags &= ~self.QtCore.Qt.ItemFlag.ItemIsSelectable
+                            flags |= self.QtCore.Qt.ItemFlag.ItemIsDragEnabled
+                            flags |= self.QtCore.Qt.ItemFlag.ItemIsSelectable
                             item.setIcon(0, folder_icon)
                             font = item.font(0)
                             font.setBold(True)
@@ -764,6 +889,9 @@ class TimelineViewer:
         self.topic_search.clear()
         self.topic_tree.collapseAll()
 
+    def _uncheck_topic_tree(self) -> None:
+        self._set_checked_topics([])
+
     def _filter_topic_tree(self, text: str) -> None:
         query = text.strip().lower()
         for index in range(self.topic_tree.topLevelItemCount()):
@@ -811,6 +939,24 @@ class TimelineViewer:
         for index in range(self.topic_tree.topLevelItemCount()):
             collect(self.topic_tree.topLevelItem(index))
         return items
+
+    def _set_checked_topics(self, topics: list[str]) -> None:
+        selected = set(topics)
+        signals_blocked = self.topic_tree.blockSignals(True)
+        try:
+            for item in self._topic_tree_items():
+                topic = self._topic_by_item.get(id(item))
+                if topic is None:
+                    continue
+                state = (
+                    self.QtCore.Qt.CheckState.Checked
+                    if topic in selected
+                    else self.QtCore.Qt.CheckState.Unchecked
+                )
+                item.setCheckState(0, state)
+        finally:
+            self.topic_tree.blockSignals(signals_blocked)
+        self._refresh_lane_view_panes()
 
     def _lane_roles_for_view(self, topic_info: TopicInfo | None) -> list[str]:
         if topic_info is None:
@@ -1120,6 +1266,28 @@ class TimelineViewer:
         if not items:
             return None
         return self._topic_by_item.get(id(items[0]))
+
+    def _topics_from_mime(self, mime: Any) -> list[str]:
+        if mime.hasFormat(TOPICS_MIME):
+            payload = bytes(mime.data(TOPICS_MIME)).decode("utf-8")
+            return self._dedupe_topic_text(payload)
+        if mime.hasFormat(TOPIC_MIME):
+            payload = bytes(mime.data(TOPIC_MIME)).decode("utf-8")
+            return self._dedupe_topic_text(payload)
+        if mime.hasText():
+            return self._dedupe_topic_text(mime.text())
+        return []
+
+    def _dedupe_topic_text(self, text: str) -> list[str]:
+        topics: list[str] = []
+        seen: set[str] = set()
+        for line in text.splitlines():
+            topic = line.strip()
+            if not topic or topic in seen:
+                continue
+            seen.add(topic)
+            topics.append(topic)
+        return topics
 
     def _current_timestamp_ns(self) -> int | None:
         if self._bag_start_ns is None:
@@ -1661,14 +1829,63 @@ def _create_topic_tree_class(QtWidgets: Any, QtCore: Any) -> type:
     class TopicTreeWidget(QtWidgets.QTreeWidget):
         def mimeData(self, items: list[Any]) -> Any:
             mime = QtCore.QMimeData()
+            topics = self._drag_topics(items)
+            if not topics:
+                return mime
+            text = "\n".join(topics)
+            mime.setData(TOPIC_MIME, topics[0].encode("utf-8"))
+            mime.setData(TOPICS_MIME, text.encode("utf-8"))
+            mime.setText(text)
+            return mime
+
+        def _drag_topics(self, items: list[Any]) -> list[str]:
+            folders = [item for item in items if item.childCount() > 0]
+            if folders:
+                return self._dedupe_topics(self._topics_under_items(folders))
+            checked_topics = self._checked_topics()
+            if checked_topics:
+                return checked_topics
+            return self._dedupe_topics(self._topics_under_items(items))
+
+        def _checked_topics(self) -> list[str]:
+            root = self.invisibleRootItem()
+            topics: list[str] = []
+
+            def collect(item: Any) -> None:
+                topic = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+                if (
+                    topic
+                    and item.checkState(0) == QtCore.Qt.CheckState.Checked
+                ):
+                    topics.append(str(topic))
+                for index in range(item.childCount()):
+                    collect(item.child(index))
+
+            for index in range(root.childCount()):
+                collect(root.child(index))
+            return self._dedupe_topics(topics)
+
+        def _topics_under_items(self, items: list[Any]) -> list[str]:
+            topics: list[str] = []
+
             for item in items:
                 topic = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
                 if topic:
-                    text = str(topic)
-                    mime.setData(TOPIC_MIME, text.encode("utf-8"))
-                    mime.setText(text)
-                    break
-            return mime
+                    topics.append(str(topic))
+                for index in range(item.childCount()):
+                    topics.extend(self._topics_under_items([item.child(index)]))
+            return topics
+
+        @staticmethod
+        def _dedupe_topics(topics: list[str]) -> list[str]:
+            deduped: list[str] = []
+            seen: set[str] = set()
+            for topic in topics:
+                if topic in seen:
+                    continue
+                seen.add(topic)
+                deduped.append(topic)
+            return deduped
 
     return TopicTreeWidget
 
@@ -2057,20 +2274,15 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
 
         def dragEnterEvent(self, event: Any) -> None:
             mime = event.mimeData()
-            if mime.hasFormat(TOPIC_MIME) or mime.hasText():
+            if mime.hasFormat(TOPICS_MIME) or mime.hasFormat(TOPIC_MIME) or mime.hasText():
                 event.acceptProposedAction()
             else:
                 event.ignore()
 
         def dropEvent(self, event: Any) -> None:
-            mime = event.mimeData()
-            topic = None
-            if mime.hasFormat(TOPIC_MIME):
-                topic = bytes(mime.data(TOPIC_MIME)).decode("utf-8")
-            elif mime.hasText():
-                topic = mime.text().strip().splitlines()[0]
-            if topic:
-                self.owner.assign_topic_to_pane(self, topic)
+            topics = self.owner._topics_from_mime(event.mimeData())
+            if topics:
+                self.owner.assign_topics_to_pane(self, topics)
                 event.acceptProposedAction()
             else:
                 event.ignore()

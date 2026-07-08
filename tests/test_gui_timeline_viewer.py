@@ -12,7 +12,11 @@ import numpy as np
 from ros2unbag.core.lane_lines import LaneFrame, LaneOverlayData, LanePoint, LaneSeries
 from ros2unbag.core.models import MessageRecord
 from ros2unbag.core.models import TopicInfo
-from ros2unbag.gui.timeline_viewer import MAX_RENDERED_PLAYBACK_FRAMES, TimelineViewer
+from ros2unbag.gui.timeline_viewer import (
+    MAX_RENDERED_PLAYBACK_FRAMES,
+    TOPICS_MIME,
+    TimelineViewer,
+)
 
 
 if importlib.util.find_spec("PySide6") is None:
@@ -76,6 +80,20 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
+    def test_main_view_titlebar_exposes_split_button(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            self.assertEqual(viewer.main_view_title.text(), "View 1")
+            self.assertEqual(viewer.split_view_button.text(), "+")
+            self.assertEqual(len(viewer._panes), 1)
+
+            viewer.split_view_button.click()
+
+            self.assertEqual(len(viewer._panes), 2)
+            self.assertEqual(viewer._panes[1].title_label.text(), "View 2: Drop topic here")
+        finally:
+            viewer.window.close()
+
     def test_version_action_ignores_qt_checked_argument(self) -> None:
         viewer = TimelineViewer()
         calls = []
@@ -114,6 +132,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertEqual(viewer.topic_search.placeholderText(), "Search topics")
             self.assertEqual(viewer.topic_expand_button.text(), "Expand")
             self.assertEqual(viewer.topic_collapse_button.text(), "Collapse")
+            self.assertEqual(viewer.topic_uncheck_button.text(), "Uncheck all")
             self.assertIs(viewer.topic_dock.widget(), viewer.topic_panel)
         finally:
             viewer.window.close()
@@ -136,7 +155,9 @@ class GuiTimelineViewerTests(unittest.TestCase):
             leaf = camera.child(0)
 
             self.assertTrue(root.font(0).bold())
-            self.assertFalse(root.flags() & QtCore.Qt.ItemFlag.ItemIsSelectable)
+            self.assertTrue(root.flags() & QtCore.Qt.ItemFlag.ItemIsSelectable)
+            self.assertTrue(root.flags() & QtCore.Qt.ItemFlag.ItemIsDragEnabled)
+            self.assertIsNone(root.data(0, QtCore.Qt.ItemDataRole.UserRole))
             self.assertTrue(leaf.flags() & QtCore.Qt.ItemFlag.ItemIsSelectable)
             self.assertTrue(leaf.flags() & QtCore.Qt.ItemFlag.ItemIsDragEnabled)
             self.assertEqual(
@@ -208,6 +229,85 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
+    def test_topic_uncheck_all_clears_checked_topics(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [_lane_topic("center"), _lane_topic("right")]
+            viewer._populate_topics()
+            center = _tree_item(viewer.topic_tree, "center")
+            right = _tree_item(viewer.topic_tree, "right")
+            center.setCheckState(0, QtCore.Qt.CheckState.Checked)
+            right.setCheckState(0, QtCore.Qt.CheckState.Checked)
+
+            viewer.topic_uncheck_button.click()
+
+            self.assertEqual(center.checkState(0), QtCore.Qt.CheckState.Unchecked)
+            self.assertEqual(right.checkState(0), QtCore.Qt.CheckState.Unchecked)
+            self.assertEqual(viewer._checked_lane_roles(), [])
+        finally:
+            viewer.window.close()
+
+    def test_topic_tree_drag_checked_topics_uses_multi_mime(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [
+                TopicInfo(
+                    name="/aiformula/camera/image_raw",
+                    msgtype="sensor_msgs/msg/Image",
+                    category="image",
+                ),
+                TopicInfo(
+                    name="/aiformula/points",
+                    msgtype="sensor_msgs/msg/PointCloud2",
+                    category="point_cloud",
+                ),
+            ]
+            viewer._populate_topics()
+            image = _tree_item(viewer.topic_tree, "image_raw")
+            points = _tree_item(viewer.topic_tree, "points")
+            image.setCheckState(0, QtCore.Qt.CheckState.Checked)
+            points.setCheckState(0, QtCore.Qt.CheckState.Checked)
+
+            mime = viewer.topic_tree.mimeData([image])
+
+            self.assertTrue(mime.hasFormat(TOPICS_MIME))
+            self.assertEqual(
+                bytes(mime.data(TOPICS_MIME)).decode("utf-8").splitlines(),
+                ["/aiformula/camera/image_raw", "/aiformula/points"],
+            )
+        finally:
+            viewer.window.close()
+
+    def test_topic_tree_drag_folder_includes_descendant_topics(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [
+                TopicInfo(
+                    name="/aiformula/camera/image_raw",
+                    msgtype="sensor_msgs/msg/Image",
+                    category="image",
+                ),
+                TopicInfo(
+                    name="/aiformula/imu",
+                    msgtype="sensor_msgs/msg/Imu",
+                    category="unknown_raw",
+                ),
+            ]
+            viewer._populate_topics()
+            folder = _tree_item(viewer.topic_tree, "aiformula")
+
+            mime = viewer.topic_tree.mimeData([folder])
+
+            self.assertEqual(
+                bytes(mime.data(TOPICS_MIME)).decode("utf-8").splitlines(),
+                ["/aiformula/camera/image_raw", "/aiformula/imu"],
+            )
+        finally:
+            viewer.window.close()
+
     def test_central_spacer_is_collapsed_for_dock_layout(self) -> None:
         viewer = TimelineViewer()
         try:
@@ -222,6 +322,55 @@ class GuiTimelineViewerTests(unittest.TestCase):
             pane = viewer._panes[0]
             self.assertEqual(pane.new_window_button.text(), "New window")
             self.assertTrue(callable(viewer.open_pane_window))
+        finally:
+            viewer.window.close()
+
+    def test_multi_topic_drop_splits_conflicting_topics(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topics = [
+                TopicInfo(
+                    name="/camera",
+                    msgtype="sensor_msgs/msg/Image",
+                    category="image",
+                ),
+                TopicInfo(
+                    name="/imu",
+                    msgtype="sensor_msgs/msg/Imu",
+                    category="unknown_raw",
+                ),
+            ]
+            viewer._topic_info_by_name = {topic.name: topic for topic in topics}
+
+            viewer.assign_topics_to_pane(viewer._panes[0], ["/camera", "/imu"])
+
+            self.assertEqual(len(viewer._panes), 2)
+            self.assertEqual(viewer._panes[0].topic, "/camera")
+            self.assertEqual(viewer._panes[1].topic, "/imu")
+        finally:
+            viewer.window.close()
+
+    def test_multi_point_cloud_drop_uses_one_view(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topics = [
+                TopicInfo(
+                    name="/points/a",
+                    msgtype="sensor_msgs/msg/PointCloud2",
+                    category="point_cloud",
+                ),
+                TopicInfo(
+                    name="/points/b",
+                    msgtype="sensor_msgs/msg/PointCloud2",
+                    category="point_cloud",
+                ),
+            ]
+            viewer._topic_info_by_name = {topic.name: topic for topic in topics}
+
+            viewer.assign_topics_to_pane(viewer._panes[0], ["/points/a", "/points/b"])
+
+            self.assertEqual(len(viewer._panes), 1)
+            self.assertEqual(viewer._panes[0].topic, "/points/a")
         finally:
             viewer.window.close()
 
@@ -674,6 +823,24 @@ class GuiTimelineViewerTests(unittest.TestCase):
 
             self.assertIs(pane.stack.currentWidget(), pane.lane_plot)
             self.assertEqual(pane.lane_plot._visible_roles, {"center", "right"})
+        finally:
+            viewer.window.close()
+
+    def test_multi_lane_drop_checks_roles_and_uses_one_view(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topics = [_lane_topic(role) for role in ("center", "left", "right")]
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = topics
+            viewer._bag_start_ns = 0
+            viewer._lane_overlay_data = _lane_overlay_data()
+            viewer._populate_topics()
+
+            viewer.assign_topics_to_pane(viewer._panes[0], [topic.name for topic in topics])
+
+            self.assertEqual(len(viewer._panes), 1)
+            self.assertTrue(viewer._panes[0].is_lane_topic())
+            self.assertEqual(viewer._checked_lane_roles(), ["center", "left", "right"])
         finally:
             viewer.window.close()
 
