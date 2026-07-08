@@ -9,6 +9,7 @@ from ros2unbag.core.lane_lines import (
     LaneOverlayData,
     LanePoint,
     LaneSeries,
+    lane_bounds,
 )
 
 
@@ -90,12 +91,14 @@ def create_lane_overlay_panel_class(
             self.update()
 
         def reset_view(self) -> None:
-            self._view_bounds = self._fit_bounds_to_plot(self._data_bounds)
             self._view_is_custom = False
+            self._fit_auto_view()
             self.update()
 
         def show_at_timestamp(self, timestamp_ns: int | None) -> None:
             self._timestamp_ns = timestamp_ns
+            if not self._view_is_custom:
+                self._fit_auto_view()
             self.update()
 
         def paintEvent(self, _event: Any) -> None:
@@ -144,21 +147,34 @@ def create_lane_overlay_panel_class(
                 return
             base_bounds = self._data.bounds_for_roles(self._visible_roles)
             self._data_bounds = self._oriented_bounds(base_bounds)
-            self._view_bounds = self._fit_bounds_to_plot(self._data_bounds)
             self._view_is_custom = False
+            self._fit_auto_view()
 
         def _oriented_bounds(self, bounds: LaneBounds | None) -> LaneBounds | None:
             if bounds is None or not self._swap_xy:
                 return bounds
             return LaneBounds(
-                min_x=bounds.min_y,
-                max_x=bounds.max_y,
+                min_x=-bounds.max_y,
+                max_x=-bounds.min_y,
                 min_y=bounds.min_x,
                 max_y=bounds.max_x,
             )
 
         def _active_bounds(self) -> LaneBounds | None:
             return self._view_bounds or self._data_bounds
+
+        def _fit_auto_view(self) -> None:
+            self._view_bounds = self._fit_bounds_to_plot(self._auto_fit_bounds())
+
+        def _auto_fit_bounds(self) -> LaneBounds | None:
+            frame_bounds = self._current_frame_bounds()
+            return frame_bounds or self._data_bounds
+
+        def _current_frame_bounds(self) -> LaneBounds | None:
+            points: list[LanePoint] = []
+            for _series, frame in self._current_frames():
+                points.extend(self._oriented_point(point) for point in frame.points)
+            return lane_bounds(points)
 
         def _fit_bounds_to_plot(self, bounds: LaneBounds | None) -> LaneBounds | None:
             if bounds is None:
@@ -237,7 +253,7 @@ def create_lane_overlay_panel_class(
                 painter.drawText(
                     QtCore.QRectF(x - 36.0, plot_rect.bottom() + 4.0, 72.0, 18.0),
                     QtCore.Qt.AlignmentFlag.AlignCenter,
-                    self._axis_value(value),
+                    self._axis_value(self._horizontal_axis_value(value)),
                 )
             for ratio, value in (
                 (0.0, bounds.max_y),
@@ -263,6 +279,9 @@ def create_lane_overlay_panel_class(
 
         def _axis_labels(self) -> tuple[str, str]:
             return ("y", "x") if self._swap_xy else ("x", "y")
+
+        def _horizontal_axis_value(self, value: float) -> float:
+            return -value if self._swap_xy else value
 
         def _draw_zero_axes(self, painter: Any, plot_rect: Any, bounds: LaneBounds) -> None:
             zero_pen = QtGui.QPen(QtGui.QColor(self._palette["accent"]), 1)
@@ -347,9 +366,13 @@ def create_lane_overlay_panel_class(
             return scale, x_pad, y_pad
 
         def _point_values(self, point: LanePoint) -> tuple[float, float]:
+            oriented = self._oriented_point(point)
+            return oriented.x, oriented.y
+
+        def _oriented_point(self, point: LanePoint) -> LanePoint:
             if self._swap_xy:
-                return point.y, point.x
-            return point.x, point.y
+                return LanePoint(x=-point.y, y=point.x)
+            return point
 
         def wheelEvent(self, event: Any) -> None:
             delta = event.angleDelta().y()
@@ -508,7 +531,7 @@ def create_lane_overlay_panel_class(
         def resizeEvent(self, event: Any) -> None:
             super().resizeEvent(event)
             if not self._view_is_custom:
-                self._view_bounds = self._fit_bounds_to_plot(self._data_bounds)
+                self._fit_auto_view()
 
         def event(self, event: Any) -> bool:
             if event.type() == QtCore.QEvent.Type.ToolTip:

@@ -505,10 +505,76 @@ class GuiTimelineViewerTests(unittest.TestCase):
 
             self.assertEqual(viewer.lane_overlay.plot._axis_labels(), ("y", "x"))
             self.assertIsNotNone(swapped)
-            self.assertEqual(swapped.min_x, normal.min_y)
-            self.assertEqual(swapped.max_x, normal.max_y)
+            self.assertEqual(swapped.min_x, -normal.max_y)
+            self.assertEqual(swapped.max_x, -normal.min_y)
             self.assertEqual(swapped.min_y, normal.min_x)
             self.assertEqual(swapped.max_y, normal.max_x)
+        finally:
+            viewer.window.close()
+
+    def test_lane_plot_auto_fit_uses_current_frame_bounds(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            data = LaneOverlayData(
+                series_by_role={
+                    "center": LaneSeries(
+                        role="center",
+                        topic=_lane_topic("center").name,
+                        frames=[
+                            LaneFrame(
+                                timestamp_ns=100,
+                                points=(LanePoint(2.0, 0.0), LanePoint(10.0, 1.0)),
+                            ),
+                            LaneFrame(
+                                timestamp_ns=200,
+                                points=(LanePoint(2.0, 500.0), LanePoint(10.0, 600.0)),
+                            ),
+                        ],
+                    )
+                }
+            )
+            viewer.lane_overlay.set_topics({"center": _lane_topic("center")})
+            viewer.lane_overlay.set_data(data)
+            plot = viewer.lane_overlay.plot
+            plot.resize(480, 320)
+
+            viewer.lane_overlay.show_at_timestamp(100)
+            first_bounds = plot._view_bounds
+
+            self.assertIsNotNone(first_bounds)
+            self.assertLess(first_bounds.max_y, 2.0)
+
+            viewer.lane_overlay.show_at_timestamp(200)
+            second_bounds = plot._view_bounds
+
+            self.assertIsNotNone(second_bounds)
+            self.assertGreater(second_bounds.min_y, 480.0)
+        finally:
+            viewer.window.close()
+
+    def test_lane_plot_swapped_axes_places_left_lane_on_left(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.lane_overlay.set_topics({
+                "center": _lane_topic("center"),
+                "left": _lane_topic("left"),
+                "right": _lane_topic("right"),
+            })
+            viewer.lane_overlay.set_data(_lane_position_data())
+            viewer.lane_overlay.show_at_timestamp(100)
+            plot = viewer.lane_overlay.plot
+            plot.resize(480, 320)
+            plot.set_swap_xy(True)
+            bounds = plot._active_bounds()
+            self.assertIsNotNone(bounds)
+            mapper = plot._point_mapper(plot._plot_rect(plot.rect()), bounds)
+
+            left_x = mapper(LanePoint(5.0, 2.0)).x()
+            center_x = mapper(LanePoint(5.0, 0.0)).x()
+            right_x = mapper(LanePoint(5.0, -2.0)).x()
+
+            self.assertLess(left_x, center_x)
+            self.assertLess(center_x, right_x)
         finally:
             viewer.window.close()
 
@@ -683,6 +749,28 @@ def _lane_overlay_data() -> LaneOverlayData:
                 ],
             )
             for role in ("center", "left", "right")
+        }
+    )
+
+
+def _lane_position_data() -> LaneOverlayData:
+    role_y = {"left": 2.0, "center": 0.0, "right": -2.0}
+    return LaneOverlayData(
+        series_by_role={
+            role: LaneSeries(
+                role=role,
+                topic=_lane_topic(role).name,
+                frames=[
+                    LaneFrame(
+                        timestamp_ns=100,
+                        points=(
+                            LanePoint(4.0, y),
+                            LanePoint(8.0, y),
+                        ),
+                    )
+                ],
+            )
+            for role, y in role_y.items()
         }
     )
 
