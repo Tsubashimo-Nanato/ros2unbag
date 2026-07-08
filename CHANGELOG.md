@@ -171,7 +171,7 @@ Progress and package naming release.
 
 ### Changed
 
-- Renamed the Python import package from `ros2_unbag` to `ros2unbag` so the distribution, command, and import name match.
+- Aligned the Python import package with the distribution and command name: `ros2unbag`.
 - Removed the unused `tqdm` runtime dependency; progress rendering now uses the existing Rich dependency.
 
 ## [1.2.2] - 2026-05-11
