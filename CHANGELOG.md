@@ -52,7 +52,7 @@ All notable changes for this project will be documented in this file.
 - Added GUI `File > Import bag...`, `File > Export...`, and `File > Version...` actions.
 - Added GUI topic drag-and-drop into preview panes.
 - Added GUI right-click pane splitting with a 4x4 maximum grid.
-- Added GUI pane controls for render, maximize/restore, pop-out, and delete.
+- Added GUI pane controls for render, maximize/restore, new window, and delete.
 - Added GUI progress feedback for bag loading, image playback-cache rendering, and topic exports.
 - Added GUI `Windows` menu toggles for dockable panels.
 - Added GUI playback rate selection for `0.25x`, `0.5x`, `1x`, `2x`, and `4x`.

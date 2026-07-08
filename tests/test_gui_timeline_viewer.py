@@ -216,6 +216,15 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
+    def test_view_pane_uses_new_window_control(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            pane = viewer._panes[0]
+            self.assertEqual(pane.new_window_button.text(), "New window")
+            self.assertTrue(callable(viewer.open_pane_window))
+        finally:
+            viewer.window.close()
+
     def test_show_without_open_bag_does_not_crash_autosize(self) -> None:
         viewer = TimelineViewer()
         try:

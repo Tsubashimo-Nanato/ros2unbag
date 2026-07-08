@@ -63,7 +63,7 @@ class TimelineViewer:
         self._grid_rows = 1
         self._grid_cols = 1
         self._panes: list[Any] = []
-        self._popout_panes: list[Any] = []
+        self._window_panes: list[Any] = []
         self._active_pane: Any | None = None
         self._maximized_pane: Any | None = None
         self._dock_widgets: dict[str, Any] = {}
@@ -178,8 +178,8 @@ class TimelineViewer:
             item.setVisible(item is pane)
 
     def delete_pane(self, pane: Any) -> None:
-        if pane in self._popout_panes:
-            self._popout_panes.remove(pane)
+        if pane in self._window_panes:
+            self._window_panes.remove(pane)
             pane.window().close()
             return
         if len(self._panes) <= 1:
@@ -194,21 +194,21 @@ class TimelineViewer:
                 self._maximized_pane = None
             self._layout_panes()
 
-    def popout_pane(self, pane: Any) -> None:
+    def open_pane_window(self, pane: Any) -> None:
         dialog = self.QtWidgets.QDialog(self.window)
         dialog.setWindowTitle(pane.topic or "ros2unbag view")
         dialog.resize(760, 520)
         layout = self.QtWidgets.QVBoxLayout(dialog)
-        popout = self._new_pane(parent=dialog)
+        window_pane = self._new_pane(parent=dialog)
         if pane.topic is not None and pane.topic_info is not None:
-            popout.set_topic(pane.topic, pane.topic_info)
-            popout.show_at_timestamp(self._current_timestamp_ns())
-        layout.addWidget(popout)
-        self._popout_panes.append(popout)
+            window_pane.set_topic(pane.topic, pane.topic_info)
+            window_pane.show_at_timestamp(self._current_timestamp_ns())
+        layout.addWidget(window_pane)
+        self._window_panes.append(window_pane)
 
         def cleanup(_result: int = 0) -> None:
-            if popout in self._popout_panes:
-                self._popout_panes.remove(popout)
+            if window_pane in self._window_panes:
+                self._window_panes.remove(window_pane)
 
         dialog.finished.connect(cleanup)
         dialog.show()
@@ -1553,7 +1553,7 @@ class TimelineViewer:
         self._log(f"Saved {output_path}")
 
     def _all_panes(self) -> list[Any]:
-        return [*self._panes, *self._popout_panes]
+        return [*self._panes, *self._window_panes]
 
     def _start_progress(self, label: str, total: int | None) -> None:
         self.progress_bar.setTextVisible(True)
@@ -1711,8 +1711,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.view_help_button.setVisible(False)
             self.max_button = QtWidgets.QToolButton()
             self.max_button.setText("Max")
-            self.pop_button = QtWidgets.QToolButton()
-            self.pop_button.setText("Pop")
+            self.new_window_button = QtWidgets.QToolButton()
+            self.new_window_button.setText("New window")
             self.delete_button = QtWidgets.QToolButton()
             self.delete_button.setText("X")
             top_bar.addWidget(self.title_label, 1)
@@ -1720,7 +1720,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             top_bar.addWidget(self.render_button)
             top_bar.addWidget(self.xy_button)
             top_bar.addWidget(self.max_button)
-            top_bar.addWidget(self.pop_button)
+            top_bar.addWidget(self.new_window_button)
             top_bar.addWidget(self.delete_button)
             layout.addLayout(top_bar)
 
@@ -1743,7 +1743,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.render_button.clicked.connect(lambda: self.ensure_rendered_for_playback())
             self.xy_button.toggled.connect(self._on_xy_toggled)
             self.max_button.clicked.connect(lambda: self.owner.toggle_maximize_pane(self))
-            self.pop_button.clicked.connect(lambda: self.owner.popout_pane(self))
+            self.new_window_button.clicked.connect(lambda: self.owner.open_pane_window(self))
             self.delete_button.clicked.connect(lambda: self.owner.delete_pane(self))
 
         def set_view_title(self, title: str) -> None:
@@ -2041,7 +2041,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             split_vertical = menu.addAction("Split vertically")
             menu.addSeparator()
             maximize = menu.addAction("Maximize / restore")
-            popout = menu.addAction("Pop out")
+            new_window = menu.addAction("New window")
             delete = menu.addAction("Delete view")
             action = menu.exec(event.globalPos())
             if action == split_horizontal:
@@ -2050,8 +2050,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                 self.owner.split_pane(self, "vertical")
             elif action == maximize:
                 self.owner.toggle_maximize_pane(self)
-            elif action == popout:
-                self.owner.popout_pane(self)
+            elif action == new_window:
+                self.owner.open_pane_window(self)
             elif action == delete:
                 self.owner.delete_pane(self)
 

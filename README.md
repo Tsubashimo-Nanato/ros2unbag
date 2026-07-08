@@ -407,7 +407,7 @@ The optional GUI is a Windows-oriented, offline, view-only RViz2-like shell:
 - Show GUI progress while opening bags, rendering image playback caches, and exporting topics.
 - Resize dock panels and topic-list columns after import/show/hide using bounded, eased resize transitions.
 - Right-click a view to split horizontally or vertically, up to a 4x4 grid.
-- Each view tile has a title and a slim top bar for rendering, maximizing/restoring, deleting, or opening the view as a pop-out window.
+- Each view tile has a title and a slim top bar for rendering, maximizing/restoring, deleting, or opening the view in a new window.
 - Save non-destructive display/export settings to `ros2unbag_session.json`.
 
 Install GUI dependencies with:
