@@ -17,6 +17,13 @@ LANE_COLORS = {
     "left": "#2f80ed",
     "right": "#eb5757",
 }
+LANE_PLOT_FIT_MARGIN_PX = 10.0
+LANE_PLOT_HELP_TEXT = (
+    "Wheel: zoom\n"
+    "Middle-drag: pan\n"
+    "Middle double-click: reset view\n"
+    "XY: swap axes"
+)
 
 
 def create_lane_overlay_panel_class(
@@ -42,10 +49,11 @@ def create_lane_overlay_panel_class(
             self._view_bounds: LaneBounds | None = None
             self._empty_text = "Open a bag with lane line PointCloud2 topics."
             self._swap_xy = False
+            self._view_is_custom = False
             self._pan_start_pos: Any | None = None
             self._pan_start_bounds: LaneBounds | None = None
             self.setFont(QtGui.QFont("Segoe UI", 9))
-            self.setToolTip("Mouse wheel zooms. Middle-drag pans. Middle double-click resets the view.")
+            self.setMouseTracking(True)
             self.setMinimumSize(300, 260)
 
         @property
@@ -82,7 +90,8 @@ def create_lane_overlay_panel_class(
             self.update()
 
         def reset_view(self) -> None:
-            self._view_bounds = self._data_bounds
+            self._view_bounds = self._fit_bounds_to_plot(self._data_bounds)
+            self._view_is_custom = False
             self.update()
 
         def show_at_timestamp(self, timestamp_ns: int | None) -> None:
@@ -98,6 +107,7 @@ def create_lane_overlay_panel_class(
 
             plot_rect = self._plot_rect(rect)
             self._draw_grid(painter, plot_rect)
+            self._draw_help_indicator(painter, rect)
 
             if self._data is None:
                 self._draw_center_text(painter, plot_rect, self._empty_text)
@@ -130,10 +140,12 @@ def create_lane_overlay_panel_class(
             if self._data is None:
                 self._data_bounds = None
                 self._view_bounds = None
+                self._view_is_custom = False
                 return
             base_bounds = self._data.bounds_for_roles(self._visible_roles)
             self._data_bounds = self._oriented_bounds(base_bounds)
-            self._view_bounds = self._data_bounds
+            self._view_bounds = self._fit_bounds_to_plot(self._data_bounds)
+            self._view_is_custom = False
 
         def _oriented_bounds(self, bounds: LaneBounds | None) -> LaneBounds | None:
             if bounds is None or not self._swap_xy:
@@ -147,6 +159,23 @@ def create_lane_overlay_panel_class(
 
         def _active_bounds(self) -> LaneBounds | None:
             return self._view_bounds or self._data_bounds
+
+        def _fit_bounds_to_plot(self, bounds: LaneBounds | None) -> LaneBounds | None:
+            if bounds is None:
+                return None
+            plot_rect = self._plot_rect(self.rect())
+            data_width = max(1e-9, bounds.max_x - bounds.min_x)
+            data_height = max(1e-9, bounds.max_y - bounds.min_y)
+            scale = min(plot_rect.width() / data_width, plot_rect.height() / data_height)
+            if scale <= 0.0:
+                return bounds
+            margin = LANE_PLOT_FIT_MARGIN_PX / scale
+            return LaneBounds(
+                min_x=bounds.min_x - margin,
+                max_x=bounds.max_x + margin,
+                min_y=bounds.min_y - margin,
+                max_y=bounds.max_y + margin,
+            )
 
         def _current_frames(self) -> list[tuple[LaneSeries, LaneFrame]]:
             if self._data is None or self._timestamp_ns is None:
@@ -267,6 +296,31 @@ def create_lane_overlay_panel_class(
                 text,
             )
 
+        def _draw_help_indicator(self, painter: Any, rect: Any) -> None:
+            indicator_rect = self._help_indicator_rect(rect)
+            fill = QtGui.QColor(self._palette["panel"])
+            fill.setAlpha(215)
+            border = QtGui.QColor(self._palette["border"])
+            text = QtGui.QColor(self._palette["muted"])
+            painter.setPen(QtGui.QPen(border, 1))
+            painter.setBrush(fill)
+            painter.drawEllipse(indicator_rect)
+            painter.setPen(text)
+            painter.drawText(
+                indicator_rect,
+                QtCore.Qt.AlignmentFlag.AlignCenter,
+                "?",
+            )
+
+        def _help_indicator_rect(self, rect: Any) -> Any:
+            size = 18.0
+            return QtCore.QRectF(
+                float(rect.right()) - size - 8.0,
+                float(rect.top()) + 8.0,
+                size,
+                size,
+            )
+
         def _point_mapper(
             self,
             plot_rect: Any,
@@ -362,6 +416,7 @@ def create_lane_overlay_panel_class(
                 min_y=anchor_y - ((anchor_y - bounds.min_y) * factor),
                 max_y=anchor_y + ((bounds.max_y - anchor_y) * factor),
             )
+            self._view_is_custom = True
             self.update()
 
         def _pan_view_by_pixels(self, dx: float, dy: float) -> None:
@@ -378,6 +433,7 @@ def create_lane_overlay_panel_class(
                 min_y=bounds.min_y + delta_y,
                 max_y=bounds.max_y + delta_y,
             )
+            self._view_is_custom = True
             self.update()
 
         def _data_at_position(
@@ -449,6 +505,21 @@ def create_lane_overlay_panel_class(
                     f"{series.role}: {len(frame.points)} pts",
                 )
 
+        def resizeEvent(self, event: Any) -> None:
+            super().resizeEvent(event)
+            if not self._view_is_custom:
+                self._view_bounds = self._fit_bounds_to_plot(self._data_bounds)
+
+        def event(self, event: Any) -> bool:
+            if event.type() == QtCore.QEvent.Type.ToolTip:
+                if self._help_indicator_rect(self.rect()).contains(QtCore.QPointF(event.pos())):
+                    QtWidgets.QToolTip.showText(event.globalPos(), LANE_PLOT_HELP_TEXT, self)
+                    return True
+                QtWidgets.QToolTip.hideText()
+                event.ignore()
+                return True
+            return super().event(event)
+
     class LaneOverlayPanel(QtWidgets.QWidget):
         def __init__(
             self,
@@ -483,6 +554,12 @@ def create_lane_overlay_panel_class(
             self.swap_axes_button.setToolTip("Swap x/y axes")
             self.swap_axes_button.toggled.connect(self._axes_changed)
             check_row.addWidget(self.swap_axes_button)
+            self.help_button = QtWidgets.QToolButton()
+            self.help_button.setObjectName("lanePlotHelpIndicator")
+            self.help_button.setText("?")
+            self.help_button.setAutoRaise(True)
+            self.help_button.setToolTip(LANE_PLOT_HELP_TEXT)
+            check_row.addWidget(self.help_button)
             check_row.addStretch(1)
             layout.addLayout(check_row)
 

@@ -25,9 +25,9 @@ from ros2unbag.core.session import Session, compatible_export_formats
 from ros2unbag.core.update_check import UpdateInfo, check_for_update, current_version
 from ros2unbag.cli.upgrade import build_upgrade_plan, run_upgrade
 from ros2unbag.gui.playback import MAX_RENDERED_PLAYBACK_FRAMES, RenderedFrame
-from ros2unbag.gui.lane_overlay import create_lane_overlay_panel_class
+from ros2unbag.gui.lane_overlay import LANE_PLOT_HELP_TEXT, create_lane_overlay_panel_class
 from ros2unbag.gui.progress import GuiProgressContext as _GuiProgressContext
-from ros2unbag.gui.renderers import create_point_cloud_renderer
+from ros2unbag.gui.renderers import POINT_CLOUD_HELP_TEXT, create_point_cloud_renderer
 from ros2unbag.gui.theme import local_changelog_text as _local_changelog_text
 from ros2unbag.gui.theme import normalize_theme as _normalize_theme
 from ros2unbag.gui.theme import theme_palette as _theme_palette
@@ -1704,6 +1704,11 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.xy_button.setCheckable(True)
             self.xy_button.setEnabled(False)
             self.xy_button.setToolTip("Swap x/y axes for lane line plots")
+            self.view_help_button = QtWidgets.QToolButton()
+            self.view_help_button.setObjectName("viewHelpIndicator")
+            self.view_help_button.setText("?")
+            self.view_help_button.setAutoRaise(True)
+            self.view_help_button.setVisible(False)
             self.max_button = QtWidgets.QToolButton()
             self.max_button.setText("Max")
             self.pop_button = QtWidgets.QToolButton()
@@ -1711,6 +1716,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.delete_button = QtWidgets.QToolButton()
             self.delete_button.setText("X")
             top_bar.addWidget(self.title_label, 1)
+            top_bar.addWidget(self.view_help_button)
             top_bar.addWidget(self.render_button)
             top_bar.addWidget(self.xy_button)
             top_bar.addWidget(self.max_button)
@@ -1768,6 +1774,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.lane_plot.set_visible_roles(())
             self.xy_button.setEnabled(False)
             self.set_lane_swap_xy(False)
+            self._refresh_view_help()
             self.raw_text.clear()
 
         def set_topic(self, topic: str, topic_info: TopicInfo) -> None:
@@ -1784,6 +1791,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             is_lane = self.is_lane_topic()
             self.xy_button.setEnabled(is_lane)
             self.set_lane_swap_xy(self.owner._lane_swap_xy if is_lane else False)
+            self._refresh_view_help()
 
         def _refresh_title(self) -> None:
             if self.topic is None:
@@ -1809,6 +1817,18 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.xy_button.setChecked(effective)
             self.xy_button.blockSignals(False)
             self.lane_plot.set_swap_xy(effective)
+
+        def _refresh_view_help(self) -> None:
+            if self.is_lane_topic():
+                self.view_help_button.setToolTip(LANE_PLOT_HELP_TEXT)
+                self.view_help_button.setVisible(True)
+                return
+            if self.topic_info is not None and self.topic_info.category == "point_cloud":
+                self.view_help_button.setToolTip(POINT_CLOUD_HELP_TEXT)
+                self.view_help_button.setVisible(True)
+                return
+            self.view_help_button.setToolTip("")
+            self.view_help_button.setVisible(False)
 
         def _on_xy_toggled(self, checked: bool) -> None:
             self.owner._set_lane_swap_xy(checked)

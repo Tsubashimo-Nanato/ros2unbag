@@ -449,12 +449,20 @@ class GuiTimelineViewerTests(unittest.TestCase):
             viewer.lane_overlay.show_at_timestamp(100)
             plot = viewer.lane_overlay.plot
             plot.resize(480, 320)
+            plot.reset_view()
             original = plot._view_bounds
+            data_bounds = plot._data_bounds
             self.assertIsNotNone(original)
+            self.assertIsNotNone(data_bounds)
+            self.assertLess(original.min_x, data_bounds.min_x)
+            self.assertGreater(original.max_x, data_bounds.max_x)
+            self.assertLess(original.min_y, data_bounds.min_y)
+            self.assertGreater(original.max_y, data_bounds.max_y)
 
             plot._zoom_at_plot_position(QtCore.QPointF(240.0, 160.0), 120)
             zoomed = plot._view_bounds
             self.assertIsNotNone(zoomed)
+            self.assertTrue(plot._view_is_custom)
             self.assertLess(zoomed.max_x - zoomed.min_x, original.max_x - original.min_x)
             self.assertLess(zoomed.max_y - zoomed.min_y, original.max_y - original.min_y)
 
@@ -467,6 +475,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
 
             plot.reset_view()
             self.assertEqual(plot._view_bounds, original)
+            self.assertFalse(plot._view_is_custom)
         finally:
             viewer.window.close()
 
@@ -479,11 +488,11 @@ class GuiTimelineViewerTests(unittest.TestCase):
                 "right": _lane_topic("right"),
             })
             viewer.lane_overlay.set_data(_lane_overlay_data())
-            normal = viewer.lane_overlay.plot._view_bounds
+            normal = viewer.lane_overlay.plot._data_bounds
             self.assertIsNotNone(normal)
 
             viewer.lane_overlay.plot.set_swap_xy(True)
-            swapped = viewer.lane_overlay.plot._view_bounds
+            swapped = viewer.lane_overlay.plot._data_bounds
 
             self.assertEqual(viewer.lane_overlay.plot._axis_labels(), ("y", "x"))
             self.assertIsNotNone(swapped)
@@ -491,6 +500,17 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertEqual(swapped.max_x, normal.max_y)
             self.assertEqual(swapped.min_y, normal.min_x)
             self.assertEqual(swapped.max_y, normal.max_x)
+        finally:
+            viewer.window.close()
+
+    def test_lane_overlay_exposes_plot_help_indicator(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            self.assertEqual(viewer.lane_overlay.help_button.objectName(), "lanePlotHelpIndicator")
+            self.assertIn("Wheel", viewer.lane_overlay.help_button.toolTip())
+            rect = viewer.lane_overlay.plot._help_indicator_rect(viewer.lane_overlay.plot.rect())
+            self.assertGreater(rect.width(), 0)
+            self.assertGreater(rect.height(), 0)
         finally:
             viewer.window.close()
 
@@ -511,6 +531,27 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertTrue(viewer.lane_overlay.plot.swap_xy)
             self.assertTrue(pane.xy_button.isChecked())
             self.assertTrue(pane.lane_plot.swap_xy)
+            self.assertFalse(pane.view_help_button.isHidden())
+            self.assertIn("Middle-drag", pane.view_help_button.toolTip())
+        finally:
+            viewer.window.close()
+
+    def test_point_cloud_view_exposes_operation_help_indicator(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            pane = viewer._panes[0]
+            pane.set_topic(
+                "/points",
+                TopicInfo(
+                    name="/points",
+                    msgtype="sensor_msgs/msg/PointCloud2",
+                    category="point_cloud",
+                ),
+            )
+
+            self.assertEqual(pane.view_help_button.objectName(), "viewHelpIndicator")
+            self.assertFalse(pane.view_help_button.isHidden())
+            self.assertIn("Wheel", pane.view_help_button.toolTip())
         finally:
             viewer.window.close()
 
