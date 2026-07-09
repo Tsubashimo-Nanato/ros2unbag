@@ -143,7 +143,7 @@ class TimelineViewer:
             self._log(f"Topic not found: {topic}")
             return
         pane.set_topic(topic, topic_info)
-        self._active_pane = pane
+        self._set_active_pane(pane)
         self._apply_topic_settings(topic)
         self._request_preview_update()
 
@@ -240,9 +240,18 @@ class TimelineViewer:
         insert_at = self._panes.index(pane) + 1 if pane in self._panes else len(self._panes)
         self._panes.insert(insert_at, new_pane)
         self._layout_panes()
+        self._set_active_pane(new_pane)
         return new_pane
 
     def toggle_maximize_pane(self, pane: Any) -> None:
+        self._set_active_pane(pane)
+        if pane in self._window_panes:
+            window = pane.window()
+            if window.isMaximized():
+                window.showNormal()
+            else:
+                window.showMaximized()
+            return
         if self._maximized_pane is pane:
             self._maximized_pane = None
             for item in self._panes:
@@ -264,12 +273,12 @@ class TimelineViewer:
             self._panes.remove(pane)
             pane.setParent(None)
             if self._active_pane is pane:
-                self._active_pane = self._panes[0]
+                self._set_active_pane(self._panes[0] if self._panes else None)
             if self._maximized_pane is pane:
                 self._maximized_pane = None
             self._layout_panes()
 
-    def open_pane_window(self, pane: Any) -> None:
+    def duplicate_pane_window(self, pane: Any) -> None:
         dialog = self.QtWidgets.QDialog(self.window)
         dialog.setWindowTitle(pane.topic or "ros2unbag view")
         dialog.resize(760, 520)
@@ -284,6 +293,8 @@ class TimelineViewer:
         def cleanup(_result: int = 0) -> None:
             if window_pane in self._window_panes:
                 self._window_panes.remove(window_pane)
+            if self._active_pane is window_pane:
+                self._set_active_pane(self._panes[0] if self._panes else None)
 
         dialog.finished.connect(cleanup)
         dialog.show()
@@ -603,34 +614,32 @@ class TimelineViewer:
         layout = QtWidgets.QHBoxLayout(title_bar)
         layout.setContentsMargins(6, 2, 4, 2)
         layout.setSpacing(6)
-        self.main_view_title = QtWidgets.QLabel("View 1", title_bar)
+        self.main_view_title = QtWidgets.QLabel("Views", title_bar)
         self.main_view_title.setObjectName("mainViewTitle")
         self.main_view_title.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents,
             True,
         )
-        self.split_view_button = QtWidgets.QToolButton(title_bar)
-        self.split_view_button.setObjectName("splitViewButton")
-        self.split_view_button.setText("+")
-        self.split_view_button.setToolTip("Split screen")
-        self.split_view_button.clicked.connect(self._split_active_view)
         layout.addWidget(self.main_view_title, 1)
-        layout.addWidget(self.split_view_button)
         self.main_view_dock.setTitleBarWidget(title_bar)
-
-    def _split_active_view(self) -> None:
-        pane = self._active_pane if self._active_pane in self._panes else None
-        if pane is None and self._panes:
-            pane = self._panes[0]
-        if pane is not None:
-            self.split_pane(pane, "horizontal")
 
     def _new_pane(self, parent: Any | None = None) -> Any:
         pane = self.TopicViewPane(self, parent)
         pane.set_view_title(f"View {self._next_view_id}")
         self._next_view_id += 1
         pane.apply_theme(_theme_palette(self._theme))
+        pane.set_active(False)
         return pane
+
+    def _set_active_pane(self, pane: Any | None) -> None:
+        if pane is not None and pane not in self._all_panes():
+            return
+        self._active_pane = pane
+        self._refresh_pane_chrome()
+
+    def _refresh_pane_chrome(self) -> None:
+        for pane in self._all_panes():
+            pane.set_active(pane is self._active_pane)
 
     def _layout_panes(self) -> None:
         while self.view_grid.count():
@@ -643,6 +652,7 @@ class TimelineViewer:
             column = index % self._grid_cols
             self.view_grid.addWidget(pane, row, column)
             pane.setVisible(self._maximized_pane is None or pane is self._maximized_pane)
+        self._refresh_pane_chrome()
         self._queue_autosize_docks()
 
     def _queue_autosize_docks(self) -> None:
@@ -1080,8 +1090,6 @@ class TimelineViewer:
         if topic is None:
             return
         self._apply_topic_settings(topic)
-        if self._active_pane is not None:
-            self.assign_topic_to_pane(self._active_pane, topic)
 
     def _on_topic_double_clicked(self, item: Any, _column: int) -> None:
         topic = item.data(0, self.QtCore.Qt.ItemDataRole.UserRole)
@@ -1916,6 +1924,9 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.title_label.setObjectName("viewTitle")
             self.render_button = QtWidgets.QToolButton()
             self.render_button.setText("Render")
+            self.split_button = QtWidgets.QToolButton()
+            self.split_button.setText("+")
+            self.split_button.setToolTip("Split this view")
             self.xy_button = QtWidgets.QToolButton()
             self.xy_button.setText("XY")
             self.xy_button.setCheckable(True)
@@ -1929,12 +1940,14 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.max_button = QtWidgets.QToolButton()
             self.max_button.setText("Max")
             self.new_window_button = QtWidgets.QToolButton()
-            self.new_window_button.setText("New window")
+            self.new_window_button.setText("Duplicate")
+            self.new_window_button.setToolTip("Open a duplicate of this view in a separate window")
             self.delete_button = QtWidgets.QToolButton()
             self.delete_button.setText("X")
             top_bar.addWidget(self.title_label, 1)
             top_bar.addWidget(self.view_help_button)
             top_bar.addWidget(self.render_button)
+            top_bar.addWidget(self.split_button)
             top_bar.addWidget(self.xy_button)
             top_bar.addWidget(self.max_button)
             top_bar.addWidget(self.new_window_button)
@@ -1958,14 +1971,21 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             layout.addWidget(self.stack, 1)
 
             self.render_button.clicked.connect(lambda: self.ensure_rendered_for_playback())
+            self.split_button.clicked.connect(lambda: self.owner.split_pane(self, "horizontal"))
             self.xy_button.toggled.connect(self._on_xy_toggled)
             self.max_button.clicked.connect(lambda: self.owner.toggle_maximize_pane(self))
-            self.new_window_button.clicked.connect(lambda: self.owner.open_pane_window(self))
+            self.new_window_button.clicked.connect(lambda: self.owner.duplicate_pane_window(self))
             self.delete_button.clicked.connect(lambda: self.owner.delete_pane(self))
 
         def set_view_title(self, title: str) -> None:
             self.view_title = title
             self._refresh_title()
+
+        def set_active(self, active: bool) -> None:
+            self.setProperty("active", active)
+            self.style().unpolish(self)
+            self.style().polish(self)
+            self.update()
 
         def apply_theme(self, palette: dict[str, str]) -> None:
             self.image_label.setStyleSheet(
@@ -2258,7 +2278,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             split_vertical = menu.addAction("Split vertically")
             menu.addSeparator()
             maximize = menu.addAction("Maximize / restore")
-            new_window = menu.addAction("New window")
+            duplicate = menu.addAction("Duplicate window")
             delete = menu.addAction("Delete view")
             action = menu.exec(event.globalPos())
             if action == split_horizontal:
@@ -2267,8 +2287,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                 self.owner.split_pane(self, "vertical")
             elif action == maximize:
                 self.owner.toggle_maximize_pane(self)
-            elif action == new_window:
-                self.owner.open_pane_window(self)
+            elif action == duplicate:
+                self.owner.duplicate_pane_window(self)
             elif action == delete:
                 self.owner.delete_pane(self)
 
@@ -2288,7 +2308,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                 event.ignore()
 
         def mousePressEvent(self, event: Any) -> None:
-            self.owner._active_pane = self
+            self.owner._set_active_pane(self)
             super().mousePressEvent(event)
 
     return TopicViewPane

@@ -116,6 +116,9 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
             background: {palette['viewer_bg']};
             color: {palette['text']};
         }}
+        QFrame#topicViewPane[active="true"] {{
+            border: 2px solid {palette['accent']};
+        }}
         QLabel {{
             background: transparent;
             color: {palette['text']};
@@ -123,6 +126,9 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
         QLabel#viewTitle {{
             color: {palette['text']};
             font-weight: 600;
+        }}
+        QFrame#topicViewPane[active="true"] QLabel#viewTitle {{
+            color: {palette['accent']};
         }}
         QTreeWidget, QTextEdit, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QScrollArea {{
             background: {palette['input']};

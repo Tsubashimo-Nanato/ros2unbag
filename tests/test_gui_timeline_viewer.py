@@ -12,6 +12,7 @@ import numpy as np
 from ros2unbag.core.lane_lines import LaneFrame, LaneOverlayData, LanePoint, LaneSeries
 from ros2unbag.core.models import MessageRecord
 from ros2unbag.core.models import TopicInfo
+from ros2unbag.core.preview import TopicDisplaySettings
 from ros2unbag.gui.timeline_viewer import (
     MAX_RENDERED_PLAYBACK_FRAMES,
     TOPICS_MIME,
@@ -80,17 +81,27 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
-    def test_main_view_titlebar_exposes_split_button(self) -> None:
+    def test_main_view_titlebar_labels_view_area(self) -> None:
         viewer = TimelineViewer()
         try:
-            self.assertEqual(viewer.main_view_title.text(), "View 1")
-            self.assertEqual(viewer.split_view_button.text(), "+")
+            self.assertEqual(viewer.main_view_title.text(), "Views")
+            self.assertTrue(viewer._panes[0].property("active"))
+        finally:
+            viewer.window.close()
+
+    def test_view_split_button_splits_active_view(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            pane = viewer._panes[0]
+            self.assertEqual(pane.split_button.text(), "+")
             self.assertEqual(len(viewer._panes), 1)
 
-            viewer.split_view_button.click()
+            pane.split_button.click()
 
             self.assertEqual(len(viewer._panes), 2)
             self.assertEqual(viewer._panes[1].title_label.text(), "View 2: Drop topic here")
+            self.assertFalse(viewer._panes[0].property("active"))
+            self.assertTrue(viewer._panes[1].property("active"))
         finally:
             viewer.window.close()
 
@@ -164,6 +175,51 @@ class GuiTimelineViewerTests(unittest.TestCase):
                 leaf.data(0, QtCore.Qt.ItemDataRole.UserRole),
                 "/aiformula/camera/image_raw",
             )
+        finally:
+            viewer.window.close()
+
+    def test_topic_single_click_selects_without_assigning_view(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topic = TopicInfo(
+                name="/aiformula/camera/image_raw",
+                msgtype="sensor_msgs/msg/Image",
+                category="image",
+            )
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [topic]
+            viewer.settings.topics = {
+                topic.name: TopicDisplaySettings(topic=topic.name),
+            }
+            viewer._populate_topics()
+            leaf = _tree_item(viewer.topic_tree, "image_raw")
+
+            viewer.topic_tree.setCurrentItem(leaf)
+
+            self.assertIsNone(viewer._panes[0].topic)
+        finally:
+            viewer.window.close()
+
+    def test_topic_double_click_assigns_selected_topic_to_active_view(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topic = TopicInfo(
+                name="/aiformula/camera/image_raw",
+                msgtype="sensor_msgs/msg/Image",
+                category="image",
+            )
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [topic]
+            viewer._topic_info_by_name = {topic.name: topic}
+            viewer.settings.topics = {
+                topic.name: TopicDisplaySettings(topic=topic.name),
+            }
+            viewer._populate_topics()
+            leaf = _tree_item(viewer.topic_tree, "image_raw")
+
+            viewer._on_topic_double_clicked(leaf, 0)
+
+            self.assertEqual(viewer._panes[0].topic, topic.name)
         finally:
             viewer.window.close()
 
@@ -320,8 +376,8 @@ class GuiTimelineViewerTests(unittest.TestCase):
         viewer = TimelineViewer()
         try:
             pane = viewer._panes[0]
-            self.assertEqual(pane.new_window_button.text(), "New window")
-            self.assertTrue(callable(viewer.open_pane_window))
+            self.assertEqual(pane.new_window_button.text(), "Duplicate")
+            self.assertTrue(callable(viewer.duplicate_pane_window))
         finally:
             viewer.window.close()
 

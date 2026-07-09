@@ -394,20 +394,20 @@ The optional GUI is a Windows-oriented, offline, view-only RViz2-like shell:
 - Use `File > Import bag...` to browse directly for a bag folder, or drag and drop a bag folder or supported bag file onto the window to open it.
 - Use `File > Export...` to export selected topics through the same compatibility rules used by the CLI.
 - Use `File > Version...` to view the installed version, local changelog, GitHub update status, release notes for newer versions, and the GUI upgrade action. Update checks and upgrades run as GUI background jobs.
-- Use the Dark mode switch in `File > Version...` to choose light or dark GUI colors.
+- Use the `Dark mode` switch on the timeline, or the `Theme` menu, to choose light or dark GUI colors.
 - Use the `Windows` menu to show or hide dockable panels such as `Topic list`, `Main view`, `Properties`, and `Output`.
 - Move, float, tab, or close GUI panels using normal Qt dock-window behavior. All panels open by default and can be restored from the `Windows` menu.
 - On first GUI startup, choose whether to check for updates, auto-update from GitHub releases, or turn the startup update checker off.
 - Show a folded-by-default topic tree with category and message count.
-- Drag topics from the topic tree into the main view.
+- Select topics in the topic tree without changing a view; double-click or drag topics into a view to assign them.
 - Scrub a timeline and preview assigned topics near the current timestamp.
 - Change playback speed with the timeline rate selector: `0.25x`, `0.5x`, `1x`, `2x`, or `4x`.
 - Preview image topics, point cloud topics, and scalar/custom message summaries.
 - Render an image topic before playback, then use Play/Pause to play from a bounded rendered preview cache instead of decoding every frame on the timer.
 - Show GUI progress while opening bags, rendering image playback caches, and exporting topics.
 - Resize dock panels and topic-list columns after import/show/hide using bounded, eased resize transitions.
-- Right-click a view to split horizontally or vertically, up to a 4x4 grid.
-- Each view tile has a title and a slim top bar for rendering, maximizing/restoring, deleting, or opening the view in a new window.
+- Use a view tile's `+` button or right-click menu to split views, up to a 4x4 grid.
+- Each view tile has a title and a slim top bar for rendering, splitting, maximizing/restoring, deleting, or opening a duplicate view in a separate window.
 - Save non-destructive display/export settings to `ros2unbag_session.json`.
 
 Install GUI dependencies with:
