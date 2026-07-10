@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ros2unbag"
 version = "1.6.1"
-description = "Offline ROS 1/2 bag inspection and export tooling."
+description = "Windows-first offline ROS 1/2 bag inspection, export, and timeline visualization."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "AGPL-3.0-or-later" }
