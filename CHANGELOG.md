@@ -2,6 +2,19 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.6.1] - 2026-07-10
+
+### Changed
+
+- Improved GUI view interactions with explicit split controls, clearer active-view selection, topic drag handling, and checked-topic cleanup controls.
+- Renamed pane popout controls to "New window" / "Duplicate" where appropriate and removed the old popout wording from the GUI path.
+- Updated point-cloud and lane-line plot previews to auto-fit visible data with margin before user pan/zoom adjustments.
+
+### Fixed
+
+- Fixed lane-line preview fitting so the current frame drives bounds instead of stale full-topic state.
+- Removed the extra lane-line filled area overlay and corrected left/right/center visual ordering in the plot.
+
 ## [1.6.0] - 2026-06-13
 
 ### Changed
