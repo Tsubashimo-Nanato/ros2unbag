@@ -1,5 +1,7 @@
 # ros2unbag
 
+English | [简体中文](README.zh-CN.md)
+
 [![Release](https://img.shields.io/badge/release-v1.6.1-f59e0b)](https://github.com/Tsubashimo-Nanato/ros2unbag/releases)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
