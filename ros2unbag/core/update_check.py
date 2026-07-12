@@ -8,7 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-GITHUB_API_ROOT = "https://api.github.com/repos/Tsubashimo-Nanato/ros2unbag"
+GITHUB_API_ROOT = "https://api.github.com/repos/Tsubashimo-Nanato/ROSBagel"
 PROJECT_NAME = "ros2unbag"
 
 

@@ -1,8 +1,8 @@
-# ros2unbag
+# ROSBagel
 
 [English](README.md) | 简体中文
 
-[![Release](https://img.shields.io/badge/release-v1.6.1-f59e0b)](https://github.com/Tsubashimo-Nanato/ros2unbag/releases)
+[![Release](https://img.shields.io/badge/release-v1.6.1-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
@@ -19,8 +19,8 @@
 ## 快速开始
 
 ```powershell
-git clone https://github.com/Tsubashimo-Nanato/ros2unbag.git
-cd ros2unbag
+git clone https://github.com/Tsubashimo-Nanato/ROSBagel.git
+cd ROSBagel
 py -m pip install -e .[gui]
 
 ros2unbag topics .\my_bag

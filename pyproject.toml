@@ -46,6 +46,7 @@ gui = ["PySide6>=6.6", "vispy>=0.14", "PyOpenGL>=3.1"]
 dev = ["pytest>=8.0"]
 
 [project.urls]
+"Repository" = "https://github.com/Tsubashimo-Nanato/ROSBagel"
 "Related Lab Repository" = "https://github.com/SophiaControl/AIformula_sophia"
 
 [project.scripts]
