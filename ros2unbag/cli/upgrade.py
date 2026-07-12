@@ -8,7 +8,7 @@ import sys
 from typing import Sequence
 
 
-DEFAULT_GITHUB_REPOSITORY = "https://github.com/Tsubashimo-Nanato/ros2unbag.git"
+DEFAULT_GITHUB_REPOSITORY = "https://github.com/Tsubashimo-Nanato/ROSBagel.git"
 UPGRADE_SOURCES = ("github", "pypi")
 
 

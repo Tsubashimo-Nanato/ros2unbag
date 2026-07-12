@@ -1,8 +1,8 @@
-# ros2unbag
+# ROSBagel
 
 English | [简体中文](README.zh-CN.md)
 
-[![Release](https://img.shields.io/badge/release-v1.6.1-f59e0b)](https://github.com/Tsubashimo-Nanato/ros2unbag/releases)
+[![Release](https://img.shields.io/badge/release-v1.6.1-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
@@ -19,8 +19,8 @@ Open ROS 1/2 bags on Windows, inspect what is inside, and export the useful part
 ## Quick Start
 
 ```powershell
-git clone https://github.com/Tsubashimo-Nanato/ros2unbag.git
-cd ros2unbag
+git clone https://github.com/Tsubashimo-Nanato/ROSBagel.git
+cd ROSBagel
 py -m pip install -e .[gui]
 
 ros2unbag topics .\my_bag
