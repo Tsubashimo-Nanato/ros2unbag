@@ -1909,6 +1909,9 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.rendered_frames: list[RenderedFrame] = []
             self.rendered_timestamps: list[int] = []
             self.rendered_size: tuple[int, int] | None = None
+            self.rendered_window_start_ns: int | None = None
+            self.rendered_reaches_topic_end = False
+            self._rendering_playback = False
             self._lane_plot_data: LaneOverlayData | None = None
             self._lane_plot_roles: tuple[str, ...] = ()
             self.setAcceptDrops(True)
@@ -2002,6 +2005,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.rendered_frames.clear()
             self.rendered_timestamps.clear()
             self.rendered_size = None
+            self.rendered_window_start_ns = None
+            self.rendered_reaches_topic_end = False
             self._lane_plot_data = None
             self._lane_plot_roles = ()
             self._refresh_title()
@@ -2020,6 +2025,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.rendered_frames.clear()
             self.rendered_timestamps.clear()
             self.rendered_size = None
+            self.rendered_window_start_ns = None
+            self.rendered_reaches_topic_end = False
             self._lane_plot_data = None
             self._lane_plot_roles = ()
             self._refresh_title()
@@ -2087,6 +2094,15 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             return self._render_playback_window(self.owner._current_timestamp_ns())
 
         def _render_playback_window(self, start_timestamp_ns: int | None = None) -> bool:
+            if self._rendering_playback:
+                return False
+            self._rendering_playback = True
+            try:
+                return self._render_playback_window_impl(start_timestamp_ns)
+            finally:
+                self._rendering_playback = False
+
+        def _render_playback_window_impl(self, start_timestamp_ns: int | None = None) -> bool:
             if self.topic is None or self.topic_info is None:
                 return False
             current_size = _usable_label_size(self.image_label)
@@ -2094,7 +2110,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                 self.rendered_frames
                 and self.rendered_size == current_size
                 and start_timestamp_ns is not None
-                and self.rendered_timestamps[0] <= start_timestamp_ns <= self.rendered_timestamps[-1]
+                and not self._timestamp_requires_render(start_timestamp_ns)
             ):
                 return True
             if self.rendered_frames and self.rendered_size == current_size and start_timestamp_ns is None:
@@ -2106,6 +2122,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             self.rendered_frames.clear()
             self.rendered_timestamps.clear()
             self.rendered_size = current_size
+            self.rendered_window_start_ns = start_timestamp_ns
+            self.rendered_reaches_topic_end = False
             total = min(
                 self.topic_info.message_count,
                 MAX_RENDERED_PLAYBACK_FRAMES,
@@ -2123,6 +2141,7 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             progress.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
             count = 0
             skipped_before_window = 0
+            hit_cache_limit = False
             for record in reader.iter_messages(topics=[self.topic]):
                 if start_timestamp_ns is not None and record.timestamp_ns < start_timestamp_ns:
                     skipped_before_window += 1
@@ -2164,12 +2183,17 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                         total if total > 0 else None,
                     )
                 if count >= MAX_RENDERED_PLAYBACK_FRAMES:
+                    hit_cache_limit = True
                     break
             progress.setValue(count if total > 0 else 0)
             if not self.rendered_frames:
                 self.owner._finish_progress("Ready")
                 self.owner._show_warning(f"No frames could be rendered for {self.topic}.")
                 return False
+            self.rendered_reaches_topic_end = not hit_cache_limit or (
+                self.topic_info.message_count > 0
+                and skipped_before_window + count >= self.topic_info.message_count
+            )
             if self.topic_info.message_count > len(self.rendered_frames) + skipped_before_window:
                 self.owner._log(
                     f"Rendered {len(self.rendered_frames)} frame(s) for {self.topic} "
@@ -2177,12 +2201,20 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                 )
             else:
                 self.owner._log(f"Rendered {len(self.rendered_frames)} frame(s) for {self.topic}.")
-            self.show_at_timestamp(self.owner._current_timestamp_ns())
+            target_timestamp_ns = (
+                start_timestamp_ns
+                if start_timestamp_ns is not None
+                else self.owner._current_timestamp_ns()
+            )
+            if target_timestamp_ns is not None:
+                self._display_rendered_frame(target_timestamp_ns)
             self.owner._finish_progress()
             return True
 
         def show_at_timestamp(self, timestamp_ns: int | None) -> None:
             if timestamp_ns is None or self.topic is None or self.topic_info is None:
+                return
+            if self._rendering_playback:
                 return
             if self.rendered_frames:
                 self._show_rendered_frame(timestamp_ns)
@@ -2224,16 +2256,24 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
                 self.owner._log(f"Preview error for {self.topic}: {exc}")
 
         def _show_rendered_frame(self, timestamp_ns: int) -> None:
-            if (
-                self.rendered_timestamps
-                and len(self.rendered_frames) >= MAX_RENDERED_PLAYBACK_FRAMES
-                and (
-                    timestamp_ns < self.rendered_timestamps[0]
-                    or timestamp_ns > self.rendered_timestamps[-1]
+            if self._timestamp_requires_render(timestamp_ns):
+                self._render_playback_window(timestamp_ns)
+                return
+            self._display_rendered_frame(timestamp_ns)
+
+        def _timestamp_requires_render(self, timestamp_ns: int) -> bool:
+            if not self.rendered_timestamps or len(self.rendered_frames) < MAX_RENDERED_PLAYBACK_FRAMES:
+                return False
+            if timestamp_ns < self.rendered_timestamps[0]:
+                return (
+                    self.rendered_window_start_ns is not None
+                    and timestamp_ns < self.rendered_window_start_ns
                 )
-            ):
-                if not self._render_playback_window(timestamp_ns):
-                    return
+            if timestamp_ns > self.rendered_timestamps[-1]:
+                return not self.rendered_reaches_topic_end
+            return False
+
+        def _display_rendered_frame(self, timestamp_ns: int) -> None:
             index = bisect_left(self.rendered_timestamps, timestamp_ns)
             if index <= 0:
                 selected = 0

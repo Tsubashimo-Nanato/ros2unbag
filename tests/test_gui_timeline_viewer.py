@@ -33,15 +33,18 @@ class DummyReader:
 
 
 class ImageReader:
-    def __init__(self, count: int) -> None:
+    def __init__(self, count: int, *, first_timestamp_ns: int = 0) -> None:
         self.count = count
+        self.first_timestamp_ns = first_timestamp_ns
+        self.iteration_count = 0
 
     def iter_messages(self, topics: list[str] | None = None) -> object:
+        self.iteration_count += 1
         topic = (topics or ["/camera"])[0]
         for index in range(self.count):
             yield MessageRecord(
                 topic=topic,
-                timestamp_ns=index,
+                timestamp_ns=self.first_timestamp_ns + index,
                 msgtype="sensor_msgs/msg/Image",
                 raw=b"raw",
                 decoded=object(),
@@ -946,6 +949,44 @@ class GuiTimelineViewerTests(unittest.TestCase):
                 self.assertTrue(pane.ensure_rendered_for_playback())
 
             self.assertEqual(len(pane.rendered_frames), MAX_RENDERED_PLAYBACK_FRAMES)
+        finally:
+            viewer.window.close()
+
+    def test_image_render_does_not_restart_before_topic_first_frame(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            topic = "/camera"
+            topic_info = TopicInfo(
+                name=topic,
+                msgtype="sensor_msgs/msg/Image",
+                category="image",
+                message_count=MAX_RENDERED_PLAYBACK_FRAMES + 25,
+            )
+            reader = ImageReader(
+                MAX_RENDERED_PLAYBACK_FRAMES + 25,
+                first_timestamp_ns=100,
+            )
+            viewer.session.reader = reader  # type: ignore[assignment]
+            viewer.session.topics = [topic_info]
+            viewer._bag_start_ns = 0
+            pane = viewer._panes[0]
+            pane.set_topic(topic, topic_info)
+            frame = SimpleNamespace(
+                array=np.zeros((4, 4, 3), dtype=np.uint8),
+                width=4,
+                height=4,
+                encoding="bgr8",
+                warnings=[],
+            )
+
+            with patch("ros2unbag.gui.timeline_viewer._decode_record_frame", return_value=frame):
+                self.assertTrue(pane.ensure_rendered_for_playback())
+                pane.show_at_timestamp(0)
+
+            self.assertEqual(reader.iteration_count, 1)
+            self.assertEqual(pane.rendered_timestamps[0], 100)
+            self.assertFalse(pane.image_label.pixmap().isNull())
+            self.assertEqual(viewer.progress_bar.text(), "Ready")
         finally:
             viewer.window.close()
 
