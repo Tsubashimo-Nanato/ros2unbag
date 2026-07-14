@@ -8,7 +8,7 @@ assignees: ""
 
 ## Summary
 
-What would you like `ros2unbag` to do?
+What would you like ROSBagel to do?
 
 ## Use Case
 

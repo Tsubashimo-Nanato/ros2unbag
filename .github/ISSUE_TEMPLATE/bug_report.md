@@ -28,7 +28,7 @@ What happened instead?
 
 - OS:
 - Python version:
-- `ros2unbag` version:
+- ROSBagel version:
 - Bag backend used (`auto`, `rosbags`, or `sqlite`):
 
 ## Notes

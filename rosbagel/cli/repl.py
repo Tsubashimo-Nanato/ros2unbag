@@ -9,14 +9,14 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from rich.prompt import Confirm
 
-from ros2unbag.cli.completion import ExportSelectCompleter, Ros2UnbagCompleter
-from ros2unbag.cli.parsing import flag as _flag
-from ros2unbag.cli.parsing import option as _option
-from ros2unbag.cli.parsing import parse_args as _parse_args
-from ros2unbag.cli.parsing import parse_inspect_time
-from ros2unbag.cli.parsing import split_repl_line
-from ros2unbag.cli.progress import progress_task
-from ros2unbag.cli.render import (
+from rosbagel.cli.completion import ExportSelectCompleter, BagelCompleter
+from rosbagel.cli.parsing import flag as _flag
+from rosbagel.cli.parsing import option as _option
+from rosbagel.cli.parsing import parse_args as _parse_args
+from rosbagel.cli.parsing import parse_inspect_time
+from rosbagel.cli.parsing import split_repl_line
+from rosbagel.cli.progress import progress_task
+from rosbagel.cli.render import (
     console,
     render_export_plan,
     render_export_result,
@@ -27,18 +27,21 @@ from ros2unbag.cli.render import (
     render_topic_duration,
     render_warnings,
 )
-from ros2unbag.cli.upgrade import build_upgrade_plan, run_upgrade
-from ros2unbag.core.manifest import write_manifest, write_topics_csv
-from ros2unbag.core.models import ExportSelection
-from ros2unbag.core.session import Session
+from rosbagel.cli.upgrade import build_upgrade_plan, run_upgrade
+from rosbagel.core.manifest import write_manifest, write_topics_csv
+from rosbagel.core.models import ExportSelection
+from rosbagel.core.session import Session
 
 
 def run_repl() -> None:
+    if sys.stdin.isatty() and _show_startup_welcome():
+        return
+
     session = Session()
     try:
         prompt = PromptSession(
-            history=FileHistory(".ros2unbag_history"),
-            completer=Ros2UnbagCompleter(session),
+            history=FileHistory(".rosbagel_history"),
+            completer=BagelCompleter(session),
             complete_while_typing=False,
         )
     except Exception:
@@ -46,11 +49,11 @@ def run_repl() -> None:
             raise
         _run_plain_repl(session)
         return
-    console.print("ros2unbag interactive shell. Type [bold]help[/bold] for commands.")
+    console.print("ROSBagel shell. Type [bold]help[/bold] for commands.")
     try:
         while True:
             try:
-                line = prompt.prompt("ros2unbag> ")
+                line = prompt.prompt("bagel> ")
             except KeyboardInterrupt:
                 continue
             except EOFError:
@@ -62,11 +65,28 @@ def run_repl() -> None:
         session.close()
 
 
+def _show_startup_welcome() -> bool:
+    from rosbagel.cli.welcome import show_welcome
+
+    if not show_welcome(console):
+        return False
+
+    try:
+        from rosbagel.gui.timeline_viewer import run_gui
+
+        run_gui(None)
+    except RuntimeError as exc:
+        console.print(f"[red]GUI unavailable:[/red] {exc}")
+        console.print("Staying in shell mode.")
+        return False
+    return True
+
+
 def _run_plain_repl(session: Session) -> None:
-    console.print("ros2unbag interactive shell. Type [bold]help[/bold] for commands.")
+    console.print("ROSBagel shell. Type [bold]help[/bold] for commands.")
     try:
         for line in sys.stdin:
-            console.print("ros2unbag> " + line.rstrip(), soft_wrap=False)
+            console.print("bagel> " + line.rstrip(), soft_wrap=False)
             should_exit = dispatch_repl_line(session, line)
             if should_exit:
                 break
@@ -262,7 +282,7 @@ def _selection_prompt(session: Session) -> Callable[[str], str]:
     if not sys.stdin.isatty():
         return input
     prompt_session = PromptSession(
-        history=FileHistory(".ros2unbag_history"),
+        history=FileHistory(".rosbagel_history"),
         completer=ExportSelectCompleter(session),
         complete_while_typing=False,
     )
@@ -330,7 +350,7 @@ def _handle_gui(session: Session, args: list[str]) -> None:
     positionals, _options = _parse_args(args)
     bag_path = Path(positionals[0]) if positionals else session.bag_path
     try:
-        from ros2unbag.gui.timeline_viewer import run_gui
+        from rosbagel.gui.timeline_viewer import run_gui
     except RuntimeError as exc:
         raise RuntimeError(str(exc)) from exc
     run_gui(bag_path)
@@ -351,9 +371,9 @@ def _handle_upgrade(args: list[str]) -> None:
             console.print("Upgrade cancelled.")
             return
 
-    console.print(f"Upgrading ros2unbag from [bold]{plan.source}[/bold]...")
+    console.print(f"Upgrading ROSBagel from [bold]{plan.source}[/bold]...")
     run_upgrade(plan)
-    console.print("[green]Upgrade finished.[/green] Restart ros2unbag to use the updated code.")
+    console.print("[green]Upgrade finished.[/green] Restart bagel to use the updated code.")
 
 
 def render_repl_help() -> None:

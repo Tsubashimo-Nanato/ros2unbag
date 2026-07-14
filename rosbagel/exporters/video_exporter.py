@@ -3,11 +3,11 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from ros2unbag.core.decoder import ImageFrame
-from ros2unbag.core.manifest import sanitize_topic_name
-from ros2unbag.core.models import ExportResult
-from ros2unbag.core.progress import ProgressCallback, advance_progress
-from ros2unbag.exporters.image_exporter import _decode_record_frame
+from rosbagel.core.decoder import ImageFrame
+from rosbagel.core.manifest import sanitize_topic_name
+from rosbagel.core.models import ExportResult
+from rosbagel.core.progress import ProgressCallback, advance_progress
+from rosbagel.exporters.image_exporter import _decode_record_frame
 
 
 def export_topic_video(

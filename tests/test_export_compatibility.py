@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ros2unbag.core.models import MessageRecord, TopicInfo
-from ros2unbag.core.session import Session, compatible_export_formats
+from rosbagel.core.models import MessageRecord, TopicInfo
+from rosbagel.core.session import Session, compatible_export_formats
 
 
 class FakeReader:

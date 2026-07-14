@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ros2unbag.cli.upgrade import UPGRADE_SOURCES
+from rosbagel.cli.upgrade import UPGRADE_SOURCES
 
 
 COMMANDS = [

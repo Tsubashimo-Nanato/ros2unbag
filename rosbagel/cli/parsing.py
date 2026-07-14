@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shlex
 
-from ros2unbag.cli.repl_config import FLAG_OPTIONS
+from rosbagel.cli.repl_config import FLAG_OPTIONS
 
 
 def split_repl_line(line: str) -> list[str]:

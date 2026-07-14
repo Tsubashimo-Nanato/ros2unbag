@@ -4,7 +4,7 @@ import json
 import unittest
 from urllib.error import HTTPError
 
-from ros2unbag.core.update_check import check_for_update
+from rosbagel.core.update_check import check_for_update
 
 
 class FakeResponse:

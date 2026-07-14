@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from ros2unbag.core.models import MessageRecord, TopicInfo
-from ros2unbag.core.session import Session
+from rosbagel.core.models import MessageRecord, TopicInfo
+from rosbagel.core.session import Session
 
 
 class FakeReader:

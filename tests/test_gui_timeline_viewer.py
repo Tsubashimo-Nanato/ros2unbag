@@ -9,11 +9,11 @@ from unittest.mock import patch
 
 import numpy as np
 
-from ros2unbag.core.lane_lines import LaneFrame, LaneOverlayData, LanePoint, LaneSeries
-from ros2unbag.core.models import MessageRecord
-from ros2unbag.core.models import TopicInfo
-from ros2unbag.core.preview import TopicDisplaySettings
-from ros2unbag.gui.timeline_viewer import (
+from rosbagel.core.lane_lines import LaneFrame, LaneOverlayData, LanePoint, LaneSeries
+from rosbagel.core.models import MessageRecord
+from rosbagel.core.models import TopicInfo
+from rosbagel.core.preview import TopicDisplaySettings
+from rosbagel.gui.timeline_viewer import (
     MAX_RENDERED_PLAYBACK_FRAMES,
     TOPICS_MIME,
     TimelineViewer,
@@ -523,7 +523,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
             viewer.window.close()
 
     def test_default_theme_is_dark_without_saved_preference(self) -> None:
-        settings = QtCore.QSettings("TsubashimoNanato", "ros2unbag")
+        settings = QtCore.QSettings("TsubashimoNanato", "rosbagel")
         previous = settings.value("ui/theme", "")
         settings.remove("ui/theme")
         viewer = TimelineViewer()
@@ -945,7 +945,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
                 warnings=[],
             )
 
-            with patch("ros2unbag.gui.timeline_viewer._decode_record_frame", return_value=frame):
+            with patch("rosbagel.gui.timeline_viewer._decode_record_frame", return_value=frame):
                 self.assertTrue(pane.ensure_rendered_for_playback())
 
             self.assertEqual(len(pane.rendered_frames), MAX_RENDERED_PLAYBACK_FRAMES)
@@ -979,7 +979,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
                 warnings=[],
             )
 
-            with patch("ros2unbag.gui.timeline_viewer._decode_record_frame", return_value=frame):
+            with patch("rosbagel.gui.timeline_viewer._decode_record_frame", return_value=frame):
                 self.assertTrue(pane.ensure_rendered_for_playback())
                 pane.show_at_timestamp(0)
 

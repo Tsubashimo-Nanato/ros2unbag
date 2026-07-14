@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 
-from ros2unbag.cli.upgrade import (
+from rosbagel.cli.upgrade import (
     DEFAULT_GITHUB_REPOSITORY,
     build_upgrade_plan,
     format_command,
@@ -36,7 +36,7 @@ class UpgradeTests(unittest.TestCase):
     def test_pypi_upgrade_ref_is_exact_version(self) -> None:
         plan = build_upgrade_plan(source="pypi", ref="1.4.3")
 
-        self.assertEqual(plan.package_spec, "ros2unbag==1.4.3")
+        self.assertEqual(plan.package_spec, "ROSBagel==1.4.3")
 
     def test_invalid_upgrade_source_is_rejected(self) -> None:
         with self.assertRaises(ValueError):

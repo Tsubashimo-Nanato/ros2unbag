@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import Annotated
 
 import typer
+from rich.prompt import Confirm
 
-from ros2unbag.cli.parsing import parse_inspect_time
-from ros2unbag.cli.render import (
+from rosbagel.cli.parsing import parse_inspect_time
+from rosbagel.cli.render import (
     console,
     render_export_result,
     render_export_results,
@@ -18,19 +19,23 @@ from ros2unbag.cli.render import (
     render_topic_duration,
     render_warnings,
 )
-from ros2unbag.cli.progress import progress_task
-from ros2unbag.cli.upgrade import UPGRADE_SOURCES, build_upgrade_plan, run_upgrade
-from ros2unbag.core.manifest import write_manifest, write_topics_csv
-from ros2unbag.core.session import (
+from rosbagel.cli.progress import progress_task
+from rosbagel.cli.upgrade import UPGRADE_SOURCES, build_upgrade_plan, run_upgrade
+from rosbagel.core.manifest import write_manifest, write_topics_csv
+from rosbagel.core.session import (
     ALL_EXPORTS,
     FUTURE_EXPORTS,
     Session,
     validate_export_format,
 )
 
-UNINSTALL_PACKAGES = (
+PACKAGE_NAMES = (
+    "ROSBagel",
     "ros2unbag",
     "rosbag-inspector",
+)
+
+DEPENDENCY_PACKAGES = (
     "rosbags",
     "numpy",
     "pandas",
@@ -64,7 +69,7 @@ UNINSTALL_PACKAGES = (
 )
 
 app = typer.Typer(
-    name="ros2unbag",
+    name="bagel",
     help="Offline ROS bag inspection and export tool.",
     no_args_is_help=False,
 )
@@ -74,7 +79,7 @@ app = typer.Typer(
 def main(ctx: typer.Context) -> None:
     """Start the interactive shell when no command is provided."""
     if ctx.invoked_subcommand is None:
-        from ros2unbag.cli.repl import run_repl
+        from rosbagel.cli.repl import run_repl
 
         run_repl()
         raise typer.Exit()
@@ -220,7 +225,7 @@ def export_select(
     ] = "auto",
 ) -> None:
     """Interactively queue selected topic exports, then confirm and run them."""
-    from ros2unbag.cli.repl import run_export_select
+    from rosbagel.cli.repl import run_export_select
 
     session = Session(backend=backend)
     try:
@@ -331,7 +336,7 @@ def gui_command(
 ) -> None:
     """Start the optional PySide6 offline timeline viewer."""
     try:
-        from ros2unbag.gui.timeline_viewer import run_gui
+        from rosbagel.gui.timeline_viewer import run_gui
     except RuntimeError as exc:
         raise typer.BadParameter(str(exc)) from exc
 
@@ -345,25 +350,55 @@ def gui_command(
 def uninstall_command(
     yes: Annotated[
         bool,
-        typer.Option("--yes", "-y", help="Run the uninstall command without printing only."),
+        typer.Option("--yes", "-y", help="Uninstall without interactive confirmation."),
+    ] = False,
+    dependencies: Annotated[
+        bool,
+        typer.Option(
+            "--dependencies",
+            help="Also remove ROSBagel runtime and optional GUI dependencies.",
+        ),
     ] = False,
     print_only: Annotated[
         bool,
         typer.Option("--print-only", help="Only print the pip uninstall command."),
     ] = False,
 ) -> None:
-    """Print or run the clean package and dependency uninstall command."""
-    display = "py -m pip uninstall " + " ".join(UNINSTALL_PACKAGES)
-    if print_only or not yes:
-        console.print("Clean uninstall command:")
+    """Uninstall ROSBagel and optionally remove its dependencies."""
+    remove_dependencies = dependencies
+    if not print_only and not yes:
+        if not Confirm.ask("Uninstall ROSBagel?", default=False, console=console):
+            console.print("Uninstall cancelled.")
+            return
+        remove_dependencies = Confirm.ask(
+            "Also remove all ROSBagel dependencies?",
+            default=False,
+            console=console,
+        )
+
+    packages = uninstall_packages(remove_dependencies=remove_dependencies)
+    display = "py -m pip uninstall -y " + " ".join(packages)
+    if print_only:
+        console.print("Uninstall command:")
         console.print(f"[bold]{display}[/bold]", soft_wrap=False)
-        console.print("This removes ros2unbag, the old rosbag-inspector package, and runtime dependencies.")
-        console.print("Run [bold]ros2unbag uninstall --yes[/bold] to execute it.")
+        if not remove_dependencies:
+            console.print("Dependencies will be kept.")
         return
 
-    exec_command = [sys.executable, "-m", "pip", "uninstall", "-y", *UNINSTALL_PACKAGES]
-    console.print("Uninstalling ros2unbag, previous package names, and dependencies...")
-    os.execv(sys.executable, exec_command)
+    scope = "ROSBagel and its dependencies" if remove_dependencies else "ROSBagel"
+    console.print(f"Uninstalling {scope}...")
+    exec_command = [sys.executable, "-m", "pip", "uninstall", "-y", *packages]
+    completed = subprocess.run(exec_command, check=False)
+    if completed.returncode != 0:
+        console.print(f"[red]Uninstall failed with exit code {completed.returncode}.[/red]")
+        raise typer.Exit(completed.returncode)
+    console.print("Uninstall finished. The bagel command has been removed from this Python environment.")
+
+
+def uninstall_packages(*, remove_dependencies: bool) -> tuple[str, ...]:
+    if not remove_dependencies:
+        return PACKAGE_NAMES
+    return (*PACKAGE_NAMES, *DEPENDENCY_PACKAGES)
 
 
 @app.command("upgrade")
@@ -400,13 +435,13 @@ def upgrade_command(
     if print_only or not yes:
         console.print("Upgrade command:")
         console.print(f"[bold]{plan.display_command}[/bold]", soft_wrap=False)
-        console.print("Run [bold]ros2unbag upgrade --yes[/bold] to execute it.")
+        console.print("Run [bold]bagel upgrade --yes[/bold] to execute it.")
         console.print(f"Sources: {', '.join(UPGRADE_SOURCES)}")
         return
 
-    console.print(f"Upgrading ros2unbag from [bold]{plan.source}[/bold]...")
+    console.print(f"Upgrading ROSBagel from [bold]{plan.source}[/bold]...")
     run_upgrade(plan)
-    console.print("[green]Upgrade finished.[/green] Restart ros2unbag to use the updated code.")
+    console.print("[green]Upgrade finished.[/green] Restart bagel to use the updated code.")
 
 
 if __name__ == "__main__":

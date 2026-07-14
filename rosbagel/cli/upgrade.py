@@ -42,9 +42,9 @@ def build_upgrade_plan(
             repository = f"{repository}@{ref}"
         package_spec = f"git+{repository}"
     elif ref:
-        package_spec = f"ros2unbag=={ref}"
+        package_spec = f"ROSBagel=={ref}"
     else:
-        package_spec = "ros2unbag"
+        package_spec = "ROSBagel"
 
     command = (sys.executable, "-m", "pip", "install", "--upgrade", package_spec)
     return UpgradePlan(

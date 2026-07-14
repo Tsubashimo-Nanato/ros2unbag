@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ros2unbag.cli.progress import (
+from rosbagel.cli.progress import (
     BlockBarColumn,
     _middle_truncate,
     _plain_progress_line,

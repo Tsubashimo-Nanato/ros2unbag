@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 
 
 GITHUB_API_ROOT = "https://api.github.com/repos/Tsubashimo-Nanato/ROSBagel"
-PROJECT_NAME = "ros2unbag"
+PROJECT_NAME = "ROSBagel"
 
 
 @dataclass(slots=True)
@@ -93,7 +93,7 @@ def _fetch_json(
         url,
         headers={
             "Accept": "application/vnd.github+json",
-            "User-Agent": "ros2unbag-update-checker",
+            "User-Agent": "ROSBagel-update-checker",
         },
     )
     with urlopen_factory(request, timeout=timeout) as response:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ros2unbag.core.lane_lines import (
+from rosbagel.core.lane_lines import (
     LANE_ROLES,
     LaneBounds,
     LaneFrame,

@@ -8,22 +8,22 @@ from typing import Any
 import json
 import math
 
-from ros2unbag.core.decoder import (
+from rosbagel.core.decoder import (
     ImageFrame,
     decode_compressed_image,
     decode_sensor_image,
     flatten_message,
     summarize_message,
 )
-from ros2unbag.core.jobs import CancellationToken
-from ros2unbag.core.models import MessageRecord
-from ros2unbag.core.point_cloud import (
+from rosbagel.core.jobs import CancellationToken
+from rosbagel.core.models import MessageRecord
+from rosbagel.core.point_cloud import (
     expanded_point_field_names,
     expanded_point_row,
     iter_point_cloud_rows,
     point_cloud_point_count,
 )
-from ros2unbag.core.session import Session
+from rosbagel.core.session import Session
 
 
 @dataclass(slots=True)

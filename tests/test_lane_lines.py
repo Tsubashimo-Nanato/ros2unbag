@@ -5,7 +5,7 @@ import math
 import struct
 import unittest
 
-from ros2unbag.core.lane_lines import (
+from rosbagel.core.lane_lines import (
     LANE_ROLES,
     LaneFrame,
     LanePoint,
@@ -16,7 +16,7 @@ from ros2unbag.core.lane_lines import (
     lane_role_for_topic,
     lane_topics,
 )
-from ros2unbag.core.models import MessageRecord, TopicInfo
+from rosbagel.core.models import MessageRecord, TopicInfo
 
 
 @dataclasses.dataclass

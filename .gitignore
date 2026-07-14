@@ -26,8 +26,8 @@ env/
 Thumbs.db
 .DS_Store
 
-# ros2unbag local shell history
-.ros2unbag_history
+# rosbagel local shell history
+.rosbagel_history
 
 # Local ROS bags and generated export outputs.
 # Keep lab/research data out of the public repository unless intentionally curated.

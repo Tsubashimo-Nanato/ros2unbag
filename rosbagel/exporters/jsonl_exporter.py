@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ros2unbag.core.decoder import message_to_plain
-from ros2unbag.core.manifest import sanitize_topic_name
-from ros2unbag.core.models import ExportResult
-from ros2unbag.core.progress import ProgressCallback, advance_progress
+from rosbagel.core.decoder import message_to_plain
+from rosbagel.core.manifest import sanitize_topic_name
+from rosbagel.core.models import ExportResult
+from rosbagel.core.progress import ProgressCallback, advance_progress
 
 
 def export_topic_jsonl(

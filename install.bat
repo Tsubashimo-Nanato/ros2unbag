@@ -6,14 +6,14 @@ set "EXTRA="
 if /I "%~1"=="gui" set "EXTRA=[gui]"
 if /I "%~1"=="--gui" set "EXTRA=[gui]"
 
-echo Installing ros2unbag%EXTRA% from %CD%
+echo Installing ROSBagel%EXTRA% from %CD%
 py -m pip install -e ".%EXTRA%"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 for /f "delims=" %%I in ('py -c "import sysconfig; print(sysconfig.get_path('scripts'))"') do set "PY_SCRIPTS=%%I"
 if not defined PY_SCRIPTS (
     echo Could not determine the Python Scripts directory.
-    echo You can still run ros2unbag with: .\ros2unbag.bat
+    echo You can still run ROSBagel with: .\bagel.bat
     exit /b 0
 )
 
@@ -26,6 +26,6 @@ if errorlevel 1 (
 
 echo.
 echo Install complete.
-echo Restart your terminal before using "ros2unbag" directly.
-echo In this repository, you can always run: .\ros2unbag.bat
+echo Restart your terminal before using "bagel" directly.
+echo In this repository, you can always run: .\bagel.bat
 echo Optional GUI install: install.bat gui

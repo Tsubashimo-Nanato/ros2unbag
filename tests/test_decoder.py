@@ -4,7 +4,7 @@ import dataclasses
 import struct
 import unittest
 
-from ros2unbag.core.decoder import decode_sensor_image, flatten_message, message_to_plain
+from rosbagel.core.decoder import decode_sensor_image, flatten_message, message_to_plain
 
 
 @dataclasses.dataclass

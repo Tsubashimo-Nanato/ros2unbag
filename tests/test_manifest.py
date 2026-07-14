@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ros2unbag.core.manifest import build_manifest, sanitize_topic_name, write_manifest
-from ros2unbag.core.models import Manifest, MessageRecord, TopicInfo
+from rosbagel.core.manifest import build_manifest, sanitize_topic_name, write_manifest
+from rosbagel.core.models import Manifest, MessageRecord, TopicInfo
 
 
 class FakeReader:
