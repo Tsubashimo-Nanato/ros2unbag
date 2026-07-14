@@ -2,6 +2,22 @@
 
 All notable changes for this project will be documented in this file.
 
+## [1.6.2] - 2026-07-14
+
+### Changed
+
+- Completed the product migration to ROSBagel: the distribution is `ROSBagel`, the Python import package is `rosbagel`, and the terminal command is `bagel`.
+- Renamed GUI titles, shell prompts, local history, sidecar settings, Windows launch helpers, documentation, and update metadata to the ROSBagel identity.
+- Reworked `bagel uninstall` to confirm package removal and separately ask whether shared runtime and GUI dependencies should also be removed. Dependencies are kept by default.
+
+### Removed
+
+- Removed the historical command and Python import path. Install ROSBagel and use `bagel` / `import rosbagel`.
+
+### Migration
+
+- Uninstall the historical package before installing this release. `bagel uninstall` also recognizes historical package names so stale installations can be removed cleanly.
+
 ## [1.6.1] - 2026-07-10
 
 ### Changed
@@ -56,10 +72,10 @@ All notable changes for this project will be documented in this file.
 
 ### Added
 
-- Added Windows `install.bat`, `uninstall.bat`, and repo-local `ros2unbag.bat` launch scripts.
+- Added Windows `install.bat`, `uninstall.bat`, and repo-local `bagel.bat` launch scripts.
 - Added native `pcd` and `ply` sequence exports for decoded `sensor_msgs/msg/PointCloud2` topics.
 - Added `npz` export for point clouds, numeric topics, and image/depth image frames.
-- Added an optional PySide6 GUI command, `ros2unbag gui [BAG_PATH]`, with an offline timeline viewer shell and sidecar display settings.
+- Added an optional PySide6 GUI command, `bagel gui [BAG_PATH]`, with an offline timeline viewer shell and sidecar display settings.
 - Added `gui [BAG_PATH]` inside the interactive shell.
 - Added GUI drag-and-drop support for bag folders/files.
 - Added GUI `File > Import bag...`, `File > Export...`, and `File > Version...` actions.
@@ -95,7 +111,7 @@ Shell upgrade and Windows progress fallback release.
 
 ### Added
 
-- Added `ros2unbag upgrade` and interactive `upgrade` shell support for upgrading the installed package from GitHub or PyPI.
+- Added `bagel upgrade` and interactive `upgrade` shell support for upgrading the installed package from GitHub or PyPI.
 - Added `--ref` support for upgrading from a specific GitHub branch, tag, commit, or exact PyPI version.
 
 ### Fixed
@@ -184,7 +200,7 @@ Progress and package naming release.
 
 ### Changed
 
-- Aligned the Python import package with the distribution and command name: `ros2unbag`.
+- Aligned the Python import package with the distribution and command name: `rosbagel`.
 - Removed the unused `tqdm` runtime dependency; progress rendering now uses the existing Rich dependency.
 
 ## [1.2.2] - 2026-05-11
@@ -219,7 +235,7 @@ Initial public release preparation.
 ### Added
 
 - Offline ROS bag scanning with topic metadata, message counts, timestamp ranges, and category hints.
-- Interactive `ros2unbag` shell with command history and topic/path completion.
+- Interactive `bagel` shell with command history and topic/path completion.
 - CLI commands for `scan`, `topics`, `export`, `export-all`, `inspect`, `dur`, `manifest`, `formats`, and `uninstall`.
 - CSV export for scalar/simple decoded messages and point-row export for decoded `sensor_msgs/msg/PointCloud2`.
 - JSONL export for arbitrary decoded messages.

@@ -6,41 +6,41 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Any
 
-from ros2unbag.core.decoder import decode_compressed_image, decode_sensor_image
-from ros2unbag.core.lane_lines import (
+from rosbagel.core.decoder import decode_compressed_image, decode_sensor_image
+from rosbagel.core.lane_lines import (
     LANE_ROLES,
     LaneOverlayData,
     build_lane_overlay_data,
     lane_role_for_topic,
     lane_topics,
 )
-from ros2unbag.core.models import ExportSelection, TopicInfo
-from ros2unbag.core.preview import (
+from rosbagel.core.models import ExportSelection, TopicInfo
+from rosbagel.core.preview import (
     PreviewService,
     PreviewSessionSettings,
     TopicDisplaySettings,
     save_preview_settings,
 )
-from ros2unbag.core.session import Session, compatible_export_formats
-from ros2unbag.core.update_check import UpdateInfo, check_for_update, current_version
-from ros2unbag.cli.upgrade import build_upgrade_plan, run_upgrade
-from ros2unbag.gui.playback import MAX_RENDERED_PLAYBACK_FRAMES, RenderedFrame
-from ros2unbag.gui.lane_overlay import LANE_PLOT_HELP_TEXT, create_lane_overlay_panel_class
-from ros2unbag.gui.progress import GuiProgressContext as _GuiProgressContext
-from ros2unbag.gui.renderers import POINT_CLOUD_HELP_TEXT, create_point_cloud_renderer
-from ros2unbag.gui.theme import local_changelog_text as _local_changelog_text
-from ros2unbag.gui.theme import normalize_theme as _normalize_theme
-from ros2unbag.gui.theme import theme_palette as _theme_palette
-from ros2unbag.gui.theme import theme_stylesheet as _theme_stylesheet
+from rosbagel.core.session import Session, compatible_export_formats
+from rosbagel.core.update_check import UpdateInfo, check_for_update, current_version
+from rosbagel.cli.upgrade import build_upgrade_plan, run_upgrade
+from rosbagel.gui.playback import MAX_RENDERED_PLAYBACK_FRAMES, RenderedFrame
+from rosbagel.gui.lane_overlay import LANE_PLOT_HELP_TEXT, create_lane_overlay_panel_class
+from rosbagel.gui.progress import GuiProgressContext as _GuiProgressContext
+from rosbagel.gui.renderers import POINT_CLOUD_HELP_TEXT, create_point_cloud_renderer
+from rosbagel.gui.theme import local_changelog_text as _local_changelog_text
+from rosbagel.gui.theme import normalize_theme as _normalize_theme
+from rosbagel.gui.theme import theme_palette as _theme_palette
+from rosbagel.gui.theme import theme_stylesheet as _theme_stylesheet
 
 
-TOPIC_MIME = "application/x-ros2unbag-topic"
-TOPICS_MIME = "application/x-ros2unbag-topics"
+TOPIC_MIME = "application/x-rosbagel-topic"
+TOPICS_MIME = "application/x-rosbagel-topics"
 IMAGE_CATEGORIES = {"image", "compressed_image", "mask_candidate"}
 
 
 class TimelineViewer:
-    """Offline bag viewer shell for Windows-first ros2unbag workflows."""
+    """Offline bag viewer shell for Windows-first ROSBagel workflows."""
 
     def __init__(self, bag_path: str | Path | None = None) -> None:
         self.QtCore, self.QtGui, self.QtWidgets = _require_pyside6()
@@ -73,7 +73,7 @@ class TimelineViewer:
         self._theme_actions: dict[str, Any] = {}
         self._next_view_id = 1
         self._playback_rate = 1.0
-        self._update_settings = self.QtCore.QSettings("TsubashimoNanato", "ros2unbag")
+        self._update_settings = self.QtCore.QSettings("TsubashimoNanato", "rosbagel")
         self._latest_update_info: UpdateInfo | None = None
         stored_theme = str(self._update_settings.value("ui/theme", "") or "")
         self._theme = _normalize_theme(stored_theme) if stored_theme else "dark"
@@ -86,7 +86,7 @@ class TimelineViewer:
         self._lane_swap_xy = False
 
         self.window = _create_drop_window(self.QtWidgets, self.QtCore, self.open_bag)
-        self.window.setWindowTitle("ros2unbag Timeline Viewer")
+        self.window.setWindowTitle("ROSBagel Timeline Viewer")
         self.window.resize(1280, 760)
         self._build_ui()
         if bag_path is not None:
@@ -280,7 +280,7 @@ class TimelineViewer:
 
     def duplicate_pane_window(self, pane: Any) -> None:
         dialog = self.QtWidgets.QDialog(self.window)
-        dialog.setWindowTitle(pane.topic or "ros2unbag view")
+        dialog.setWindowTitle(pane.topic or "ROSBagel view")
         dialog.resize(760, 520)
         layout = self.QtWidgets.QVBoxLayout(dialog)
         window_pane = self._new_pane(parent=dialog)
@@ -1335,7 +1335,7 @@ class TimelineViewer:
         box = self.QtWidgets.QMessageBox(self.window)
         box.setWindowTitle("Update checker")
         box.setIcon(self.QtWidgets.QMessageBox.Icon.Question)
-        box.setText("How should ros2unbag check for updates on startup?")
+        box.setText("How should ROSBagel check for updates on startup?")
         box.setInformativeText(
             "The checker contacts the GitHub release API. You can change this later "
             "from File > Version."
@@ -1356,7 +1356,7 @@ class TimelineViewer:
         if isinstance(update_info, bool):
             update_info = None
         dialog = self.QtWidgets.QDialog(self.window)
-        dialog.setWindowTitle("ros2unbag version")
+        dialog.setWindowTitle("ROSBagel version")
         dialog.resize(720, 560)
         layout = self.QtWidgets.QVBoxLayout(dialog)
 
@@ -1468,7 +1468,7 @@ class TimelineViewer:
                 latest = info.latest_ref or info.latest_version or "unknown"
                 self.QtWidgets.QMessageBox.information(
                     parent or self.window,
-                    "ros2unbag update",
+                    "ROSBagel update",
                     f"No newer version found.\nLatest: {latest}\nInstalled: {info.current_version}",
                 )
             if on_result is not None:
@@ -1482,7 +1482,7 @@ class TimelineViewer:
 
         self._run_background(
             title="Checking for updates",
-            label="Checking for ros2unbag updates...",
+            label="Checking for ROSBagel updates...",
             work=check_for_update,
             on_success=handle_success,
             on_error=handle_error,
@@ -1502,8 +1502,8 @@ class TimelineViewer:
         if not automatic:
             answer = self.QtWidgets.QMessageBox.question(
                 parent or self.window,
-                "Upgrade ros2unbag",
-                f"Upgrade ros2unbag to {info.latest_ref}?\n\n"
+                "Upgrade ROSBagel",
+                f"Upgrade ROSBagel to {info.latest_ref}?\n\n"
                 "The application should be restarted after upgrade.",
                 self.QtWidgets.QMessageBox.StandardButton.Yes
                 | self.QtWidgets.QMessageBox.StandardButton.No,
@@ -1517,12 +1517,12 @@ class TimelineViewer:
             self.QtWidgets.QMessageBox.information(
                 parent or self.window,
                 "Upgrade complete",
-                "Upgrade finished. Restart ros2unbag to use the updated code.",
+                "Upgrade finished. Restart ROSBagel to use the updated code.",
             )
 
         self._run_background(
-            title="Upgrade ros2unbag",
-            label=f"Upgrading ros2unbag to {info.latest_ref}...",
+            title="Upgrade ROSBagel",
+            label=f"Upgrading ROSBagel to {info.latest_ref}...",
             work=work,
             on_success=finish,
             on_error=lambda message: self._show_warning(f"Upgrade failed: {message}"),
@@ -1721,9 +1721,9 @@ class TimelineViewer:
     def _save_sidecar(self) -> None:
         bag_path = Path(self.settings.bag_path) if self.settings.bag_path else Path.cwd()
         output_path = (
-            bag_path / "ros2unbag_session.json"
+            bag_path / "rosbagel_session.json"
             if bag_path.is_dir()
-            else bag_path.with_name("ros2unbag_session.json")
+            else bag_path.with_name("rosbagel_session.json")
         )
         save_preview_settings(self.settings, output_path)
         self._log(f"Saved {output_path}")
@@ -1759,7 +1759,7 @@ class TimelineViewer:
         self.QtWidgets.QApplication.processEvents()
 
     def _show_warning(self, message: str) -> None:
-        self.QtWidgets.QMessageBox.warning(self.window, "ros2unbag", message)
+        self.QtWidgets.QMessageBox.warning(self.window, "ROSBagel", message)
         self._log(message)
 
     def _log(self, message: str) -> None:

@@ -6,17 +6,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ros2unbag.core.jobs import CancelledError, CancellationToken
-from ros2unbag.core.models import MessageRecord, TopicInfo
-from ros2unbag.core.point_cloud import iter_point_cloud_rows
-from ros2unbag.core.preview import (
+from rosbagel.core.jobs import CancelledError, CancellationToken
+from rosbagel.core.models import MessageRecord, TopicInfo
+from rosbagel.core.point_cloud import iter_point_cloud_rows
+from rosbagel.core.preview import (
     PreviewService,
     PreviewSessionSettings,
     TopicDisplaySettings,
     load_preview_settings,
     save_preview_settings,
 )
-from ros2unbag.core.session import Session
+from rosbagel.core.session import Session
 
 
 @dataclasses.dataclass
@@ -128,7 +128,7 @@ class PreviewTests(unittest.TestCase):
         ]
         preview = PreviewService(session)
 
-        with patch("ros2unbag.core.preview.iter_point_cloud_rows", wraps=iter_point_cloud_rows) as rows:
+        with patch("rosbagel.core.preview.iter_point_cloud_rows", wraps=iter_point_cloud_rows) as rows:
             cloud_preview = preview.point_cloud_preview("/points", 100, max_points=1)
 
         self.assertIsNotNone(cloud_preview)
@@ -151,7 +151,7 @@ class PreviewTests(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = save_preview_settings(settings, Path(temp_dir) / "ros2unbag_session.json")
+            path = save_preview_settings(settings, Path(temp_dir) / "rosbagel_session.json")
             loaded = load_preview_settings(path)
 
         self.assertEqual(loaded.bag_path, "bag")

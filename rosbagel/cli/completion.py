@@ -6,8 +6,8 @@ from pathlib import Path
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 
-from ros2unbag.cli.parsing import split_repl_line
-from ros2unbag.cli.repl_config import (
+from rosbagel.cli.parsing import split_repl_line
+from rosbagel.cli.repl_config import (
     BACKEND_CHOICES,
     COMMANDS,
     FLAG_OPTIONS,
@@ -16,10 +16,10 @@ from ros2unbag.cli.repl_config import (
     VALUE_OPTIONS,
     VIEW_CHOICES,
 )
-from ros2unbag.core.session import ALL_EXPORTS, Session, compatible_export_formats
+from rosbagel.core.session import ALL_EXPORTS, Session, compatible_export_formats
 
 
-class Ros2UnbagCompleter(Completer):
+class BagelCompleter(Completer):
     def __init__(self, session: Session) -> None:
         self.session = session
 
@@ -162,7 +162,7 @@ class Ros2UnbagCompleter(Completer):
 
 class ExportSelectCompleter(Completer):
     def __init__(self, session: Session) -> None:
-        self.base = Ros2UnbagCompleter(session)
+        self.base = BagelCompleter(session)
 
     def get_completions(self, document: Document, complete_event: object) -> Iterable[Completion]:
         current = _current_word(document.text_before_cursor)

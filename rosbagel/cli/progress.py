@@ -19,8 +19,8 @@ from rich.progress import (
 )
 from rich.text import Text
 
-from ros2unbag.cli.render import console
-from ros2unbag.core.progress import ProgressCallback
+from rosbagel.cli.render import console
+from rosbagel.core.progress import ProgressCallback
 
 
 class BlockBarColumn(ProgressColumn):
@@ -263,7 +263,7 @@ def _terminal_width() -> int:
 
 
 def _should_use_plain_progress() -> bool:
-    if os.environ.get("ROS2UNBAG_PLAIN_PROGRESS"):
+    if os.environ.get("ROSBAGEL_PLAIN_PROGRESS"):
         return True
     return os.name == "nt" or bool(getattr(console, "legacy_windows", False))
 

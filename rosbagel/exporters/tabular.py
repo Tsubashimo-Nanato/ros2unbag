@@ -5,9 +5,9 @@ import dataclasses
 import hashlib
 from typing import Any
 
-from ros2unbag.core.decoder import flatten_message
-from ros2unbag.core.point_cloud import point_cloud_field_names, point_cloud_rows
-from ros2unbag.core.progress import ProgressCallback, advance_progress
+from rosbagel.core.decoder import flatten_message
+from rosbagel.core.point_cloud import point_cloud_field_names, point_cloud_rows
+from rosbagel.core.progress import ProgressCallback, advance_progress
 
 
 METADATA_FIELDS = ["timestamp_ns", "timestamp_sec_from_start", "topic"]

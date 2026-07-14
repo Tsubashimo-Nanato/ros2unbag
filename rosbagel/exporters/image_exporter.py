@@ -3,10 +3,10 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from ros2unbag.core.decoder import ImageFrame, decode_compressed_image, decode_sensor_image
-from ros2unbag.core.manifest import sanitize_topic_name
-from ros2unbag.core.models import ExportResult
-from ros2unbag.core.progress import ProgressCallback, advance_progress
+from rosbagel.core.decoder import ImageFrame, decode_compressed_image, decode_sensor_image
+from rosbagel.core.manifest import sanitize_topic_name
+from rosbagel.core.models import ExportResult
+from rosbagel.core.progress import ProgressCallback, advance_progress
 
 
 def export_topic_images(

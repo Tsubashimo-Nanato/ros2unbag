@@ -5,15 +5,15 @@ import math
 from pathlib import Path
 from typing import Any
 
-from ros2unbag.core.decoder import decode_compressed_image, decode_sensor_image, flatten_message
-from ros2unbag.core.manifest import sanitize_topic_name
-from ros2unbag.core.models import ExportResult
-from ros2unbag.core.point_cloud import (
+from rosbagel.core.decoder import decode_compressed_image, decode_sensor_image, flatten_message
+from rosbagel.core.manifest import sanitize_topic_name
+from rosbagel.core.models import ExportResult
+from rosbagel.core.point_cloud import (
     expanded_point_field_names,
     expanded_point_row,
     iter_point_cloud_rows,
 )
-from ros2unbag.core.progress import ProgressCallback, advance_progress
+from rosbagel.core.progress import ProgressCallback, advance_progress
 
 
 IMAGE_TYPES = {"sensor_msgs/msg/Image", "sensor_msgs/msg/CompressedImage"}

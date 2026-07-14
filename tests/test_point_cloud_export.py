@@ -9,12 +9,12 @@ from pathlib import Path
 
 import numpy as np
 
-from ros2unbag.core.models import MessageRecord
-from ros2unbag.core.point_cloud import point_cloud_declared_point_count, point_cloud_rows
-from ros2unbag.core.session import _coverage_warnings
-from ros2unbag.exporters.csv_exporter import export_topic_csv
-from ros2unbag.exporters.npz_exporter import export_topic_npz
-from ros2unbag.exporters.point_cloud_exporter import export_topic_point_clouds
+from rosbagel.core.models import MessageRecord
+from rosbagel.core.point_cloud import point_cloud_declared_point_count, point_cloud_rows
+from rosbagel.core.session import _coverage_warnings
+from rosbagel.exporters.csv_exporter import export_topic_csv
+from rosbagel.exporters.npz_exporter import export_topic_npz
+from rosbagel.exporters.point_cloud_exporter import export_topic_point_clouds
 
 
 @dataclasses.dataclass

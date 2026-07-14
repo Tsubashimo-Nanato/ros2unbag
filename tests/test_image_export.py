@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ros2unbag.core.models import MessageRecord
-from ros2unbag.exporters.image_exporter import export_topic_images
-from ros2unbag.exporters.video_exporter import export_topic_video
+from rosbagel.core.models import MessageRecord
+from rosbagel.exporters.image_exporter import export_topic_images
+from rosbagel.exporters.video_exporter import export_topic_video
 
 
 @dataclasses.dataclass

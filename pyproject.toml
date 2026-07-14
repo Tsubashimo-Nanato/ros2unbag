@@ -3,8 +3,8 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ros2unbag"
-version = "1.6.1"
+name = "ROSBagel"
+version = "1.6.2"
 description = "Windows-first offline ROS 1/2 bag inspection, export, and timeline visualization."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -50,10 +50,10 @@ dev = ["pytest>=8.0"]
 "Related Lab Repository" = "https://github.com/SophiaControl/AIformula_sophia"
 
 [project.scripts]
-ros2unbag = "ros2unbag.cli.main:app"
+bagel = "rosbagel.cli.main:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ros2unbag"]
+packages = ["rosbagel"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

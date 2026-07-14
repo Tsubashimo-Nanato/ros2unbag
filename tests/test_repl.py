@@ -6,15 +6,15 @@ from pathlib import Path
 
 from prompt_toolkit.document import Document
 
-from ros2unbag.cli.parsing import parse_inspect_time
-from ros2unbag.cli.repl import (
+from rosbagel.cli.parsing import parse_inspect_time
+from rosbagel.cli.repl import (
     ExportSelectCompleter,
-    Ros2UnbagCompleter,
+    BagelCompleter,
     _selection_from_args,
     split_repl_line,
 )
-from ros2unbag.core.models import TopicInfo
-from ros2unbag.core.session import Session
+from rosbagel.core.models import TopicInfo
+from rosbagel.core.session import Session
 
 
 class ReplTests(unittest.TestCase):
@@ -39,7 +39,7 @@ class ReplTests(unittest.TestCase):
             parse_inspect_time("1.25", absolute_ns=True)
 
     def test_completes_format_values(self) -> None:
-        completer = Ros2UnbagCompleter(Session())
+        completer = BagelCompleter(Session())
         completions = list(
             completer.get_completions(Document("export /topic --format "), object())
         )
@@ -56,7 +56,7 @@ class ReplTests(unittest.TestCase):
                 category="point_cloud",
             )
         ]
-        completer = Ros2UnbagCompleter(session)
+        completer = BagelCompleter(session)
 
         completions = list(
             completer.get_completions(Document("export /points --format "), object())
@@ -73,7 +73,7 @@ class ReplTests(unittest.TestCase):
             TopicInfo(name="/camera/image_raw", msgtype="sensor_msgs/msg/Image"),
             TopicInfo(name="/imu", msgtype="sensor_msgs/msg/Imu"),
         ]
-        completer = Ros2UnbagCompleter(session)
+        completer = BagelCompleter(session)
         completions = list(completer.get_completions(Document("export /c"), object()))
         self.assertEqual([item.text for item in completions], ["/camera/image_raw"])
 
@@ -83,7 +83,7 @@ class ReplTests(unittest.TestCase):
             TopicInfo(name="/camera/image_raw", msgtype="sensor_msgs/msg/Image"),
             TopicInfo(name="/imu", msgtype="sensor_msgs/msg/Imu"),
         ]
-        completer = Ros2UnbagCompleter(session)
+        completer = BagelCompleter(session)
         completions = list(completer.get_completions(Document("dur /i"), object()))
         self.assertEqual([item.text for item in completions], ["/imu"])
 
@@ -92,7 +92,7 @@ class ReplTests(unittest.TestCase):
         session.topics = [
             TopicInfo(name="/camera/image_raw", msgtype="sensor_msgs/msg/Image"),
         ]
-        completer = Ros2UnbagCompleter(session)
+        completer = BagelCompleter(session)
 
         after_topic = list(
             completer.get_completions(Document("export /camera/image_raw "), object())
@@ -112,7 +112,7 @@ class ReplTests(unittest.TestCase):
         session.topics = [
             TopicInfo(name="/camera/image_raw", msgtype="sensor_msgs/msg/Image"),
         ]
-        completer = Ros2UnbagCompleter(session)
+        completer = BagelCompleter(session)
 
         completions = list(
             completer.get_completions(Document("export --topic /c"), object())
@@ -121,7 +121,7 @@ class ReplTests(unittest.TestCase):
         self.assertEqual([item.text for item in completions], ["/camera/image_raw"])
 
     def test_export_completion_offers_fps_after_mp4_output(self) -> None:
-        completer = Ros2UnbagCompleter(Session())
+        completer = BagelCompleter(Session())
 
         completions = list(
             completer.get_completions(
@@ -133,7 +133,7 @@ class ReplTests(unittest.TestCase):
         self.assertEqual([item.text for item in completions], ["--fps "])
 
     def test_command_completion_suggests_next_required_option(self) -> None:
-        completer = Ros2UnbagCompleter(Session())
+        completer = BagelCompleter(Session())
 
         export_all = list(completer.get_completions(Document("export-all "), object()))
         inspect = list(completer.get_completions(Document("inspect "), object()))
@@ -143,7 +143,7 @@ class ReplTests(unittest.TestCase):
         self.assertIn("--dur ", [item.text for item in inspect])
 
     def test_topics_completion_prefers_all_and_selector_options(self) -> None:
-        completer = Ros2UnbagCompleter(Session())
+        completer = BagelCompleter(Session())
 
         completions = list(completer.get_completions(Document("topics "), object()))
 
@@ -152,14 +152,14 @@ class ReplTests(unittest.TestCase):
     def test_scan_completion_prefers_all_when_bag_is_open(self) -> None:
         session = Session()
         session.reader = object()  # type: ignore[assignment]
-        completer = Ros2UnbagCompleter(session)
+        completer = BagelCompleter(session)
 
         completions = list(completer.get_completions(Document("scan "), object()))
 
         self.assertEqual([item.text for item in completions], ["--all "])
 
     def test_upgrade_completion_offers_source_values(self) -> None:
-        completer = Ros2UnbagCompleter(Session())
+        completer = BagelCompleter(Session())
 
         option_completions = list(completer.get_completions(Document("upgrade "), object()))
         source_completions = list(
@@ -172,7 +172,7 @@ class ReplTests(unittest.TestCase):
     def test_inspect_duration_option_completes_topics(self) -> None:
         session = Session()
         session.topics = [TopicInfo(name="/imu", msgtype="sensor_msgs/msg/Imu")]
-        completer = Ros2UnbagCompleter(session)
+        completer = BagelCompleter(session)
 
         completions = list(
             completer.get_completions(Document("inspect --dur /i"), object())
@@ -207,7 +207,7 @@ class ReplTests(unittest.TestCase):
     def test_scan_path_completion_still_works_after_opening_bag(self) -> None:
         session = Session()
         session.reader = object()  # type: ignore[assignment]
-        completer = Ros2UnbagCompleter(session)
+        completer = BagelCompleter(session)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             bag_dir = Path(temp_dir) / "bagdata"
@@ -223,7 +223,7 @@ class ReplTests(unittest.TestCase):
         self.assertIn("bagdata", completions[0].text)
 
     def test_gui_path_completion(self) -> None:
-        completer = Ros2UnbagCompleter(Session())
+        completer = BagelCompleter(Session())
 
         with tempfile.TemporaryDirectory() as temp_dir:
             bag_dir = Path(temp_dir) / "bagdata"

@@ -2,16 +2,16 @@
 
 [English](README.md) | 简体中文
 
-[![Release](https://img.shields.io/badge/release-v1.6.1-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
+[![Release](https://img.shields.io/badge/release-v1.6.2-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
 
 在 Windows 上直接打开 ROS 1/2 bag，检查里面有什么，再导出真正需要的数据，不必先把工作站临时改造成一套 ROS 环境。
 
-`ros2unbag` 是一个离线、只读的 bag 检查与导出工具，提供 CLI、交互式 shell，以及基于 PySide6 的时间线查看器，可用于图像、车道线点云、topic 元数据和同步预览。
+ROSBagel 是一个离线、只读的 bag 检查与导出工具，终端命令为 `bagel`。它提供 CLI、交互式 shell，以及基于 PySide6 的时间线查看器，可用于图像、车道线点云、topic 元数据和同步预览。
 
-![ros2unbag 时间线查看器](docs/media/gui-timeline.png)
+![ROSBagel 时间线查看器](docs/media/gui-timeline.png)
 
 > [!NOTE]
 > CLI 和导出器已经可以投入实际使用。GUI 仍在积极开发中：交互和渲染会持续改进，欢迎趁那些别扭的边角还容易调整时提交问题。
@@ -23,8 +23,8 @@ git clone https://github.com/Tsubashimo-Nanato/ROSBagel.git
 cd ROSBagel
 py -m pip install -e .[gui]
 
-ros2unbag topics .\my_bag
-ros2unbag gui .\my_bag
+bagel topics .\my_bag
+bagel gui .\my_bag
 ```
 
 仓库也提供了 Windows 安装脚本：
@@ -34,7 +34,7 @@ install.bat
 install.bat gui
 ```
 
-如果执行 `install.bat` 后终端暂时找不到 `ros2unbag`，请重启终端。
+如果执行 `install.bat` 后终端暂时找不到 `bagel`，请重启终端。
 
 ## 能做什么
 
@@ -67,35 +67,35 @@ install.bat gui
 启动交互式 shell：
 
 ```powershell
-ros2unbag
+bagel
 ```
 
 一个简短的交互过程如下：
 
 ```text
-ros2unbag> open .\my_bag
-ros2unbag> topics
-ros2unbag> scan --all
-ros2unbag> inspect --time 22.2 --dur /camera/image_raw
-ros2unbag> export /camera/image_raw --format mp4 --fps 30 --out .\export
-ros2unbag> export /points --format pcd --out .\export
-ros2unbag> gui
+bagel> open .\my_bag
+bagel> topics
+bagel> scan --all
+bagel> inspect --time 22.2 --dur /camera/image_raw
+bagel> export /camera/image_raw --format mp4 --fps 30 --out .\export
+bagel> export /points --format pcd --out .\export
+bagel> gui
 ```
 
 也可以直接使用对应命令：
 
 ```powershell
-ros2unbag scan .\my_bag --out .\scan
-ros2unbag export .\my_bag --topic /imu --format parquet --out .\export
-ros2unbag export .\my_bag --topic /camera/image_raw --format png --out .\export
-ros2unbag export .\my_bag --topic /points --format ply --out .\export
-ros2unbag export-all .\my_bag --out .\export
+bagel scan .\my_bag --out .\scan
+bagel export .\my_bag --topic /imu --format parquet --out .\export
+bagel export .\my_bag --topic /camera/image_raw --format png --out .\export
+bagel export .\my_bag --topic /points --format ply --out .\export
+bagel export-all .\my_bag --out .\export
 ```
 
 升级已安装版本：
 
 ```powershell
-ros2unbag upgrade --yes
+bagel upgrade --yes
 ```
 
 ## 导出说明
@@ -115,7 +115,7 @@ ros2unbag upgrade --yes
 直接启动 GUI：
 
 ```powershell
-ros2unbag gui .\my_bag
+bagel gui .\my_bag
 ```
 
 ## 示例数据来源
@@ -124,7 +124,7 @@ ros2unbag gui .\my_bag
 
 室外自动驾驶项目的背景资料可参阅 [AI Formula 开发页面](https://sites.google.com/p.chibakoudai.jp/rdc-lab/development/ai-formula)。该 bag 仅作为本地调试数据，不随本仓库分发。
 
-这些链接用于说明数据来源和项目背景，不代表相关组织维护、认可或审计 `ros2unbag`。
+这些链接用于说明数据来源和项目背景，不代表相关组织维护、认可或审计 ROSBagel。
 
 ## 已知限制
 
@@ -148,4 +148,4 @@ ros2unbag gui .\my_bag
 
 ## 许可证
 
-`ros2unbag` 使用 `AGPL-3.0-or-later` 许可证，详见 [LICENSE](LICENSE)。
+ROSBagel 使用 `AGPL-3.0-or-later` 许可证，详见 [LICENSE](LICENSE)。

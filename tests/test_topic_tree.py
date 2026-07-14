@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from ros2unbag.core.models import TopicInfo
-from ros2unbag.core.topic_tree import (
+from rosbagel.core.models import TopicInfo
+from rosbagel.core.topic_tree import (
     build_topic_tree,
     split_topic_name,
     topic_leaf_name,

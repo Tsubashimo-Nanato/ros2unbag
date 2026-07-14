@@ -3,8 +3,8 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from ros2unbag.core.models import MessageRecord, TopicInfo
-from ros2unbag.core.type_classifier import classify_topic, suggested_exports_for_category
+from rosbagel.core.models import MessageRecord, TopicInfo
+from rosbagel.core.type_classifier import classify_topic, suggested_exports_for_category
 
 
 @dataclasses.dataclass

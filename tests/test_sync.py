@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from ros2unbag.core.models import MessageRecord
-from ros2unbag.core.topic_indexer import TimestampIndex
+from rosbagel.core.models import MessageRecord
+from rosbagel.core.topic_indexer import TimestampIndex
 
 
 class TimestampIndexTests(unittest.TestCase):

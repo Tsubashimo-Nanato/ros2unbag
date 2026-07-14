@@ -1,4 +1,4 @@
-"""Offline ROS bag inspection and export tools."""
+"""ROSBagel offline ROS bag inspection and export tools."""
 
 from .core.models import (
     ExportResult,
@@ -18,4 +18,4 @@ __all__ = [
     "TopicInfo",
 ]
 
-__version__ = "1.6.1"
+__version__ = "1.6.2"

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from ros2unbag.core.export_policy import (
+from rosbagel.core.export_policy import (
     IMPLEMENTED_EXPORTS,
     compatible_export_formats,
     default_export_formats,
     validate_export_format,
 )
-from ros2unbag.core.export_runner import EXPORT_HANDLERS, run_export
-from ros2unbag.core.models import TopicInfo
+from rosbagel.core.export_runner import EXPORT_HANDLERS, run_export
+from rosbagel.core.models import TopicInfo
 
 
 class ExportPolicyTests(unittest.TestCase):

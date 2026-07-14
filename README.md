@@ -2,16 +2,16 @@
 
 English | [简体中文](README.zh-CN.md)
 
-[![Release](https://img.shields.io/badge/release-v1.6.1-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
+[![Release](https://img.shields.io/badge/release-v1.6.2-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
 
 Open ROS 1/2 bags on Windows, inspect what is inside, and export the useful parts without first turning your workstation into a temporary ROS installation.
 
-`ros2unbag` is an offline, read-only bag inspector and exporter. It provides a CLI, an interactive shell, and a PySide6 timeline viewer for images, lane-line point clouds, topic metadata, and synchronized previews.
+ROSBagel is an offline, read-only bag inspector and exporter. Its terminal command is `bagel`. It provides a CLI, an interactive shell, and a PySide6 timeline viewer for images, lane-line point clouds, topic metadata, and synchronized previews.
 
-![ros2unbag Timeline Viewer](docs/media/gui-timeline.png)
+![ROSBagel Timeline Viewer](docs/media/gui-timeline.png)
 
 > [!NOTE]
 > The CLI and exporters are usable today. The GUI is under active development: expect regular interaction and rendering improvements, and please report the awkward edges while they are still easy to move.
@@ -23,8 +23,8 @@ git clone https://github.com/Tsubashimo-Nanato/ROSBagel.git
 cd ROSBagel
 py -m pip install -e .[gui]
 
-ros2unbag topics .\my_bag
-ros2unbag gui .\my_bag
+bagel topics .\my_bag
+bagel gui .\my_bag
 ```
 
 Windows helpers are also included:
@@ -34,7 +34,7 @@ install.bat
 install.bat gui
 ```
 
-Restart the terminal after `install.bat` if the `ros2unbag` command is not immediately available.
+Restart the terminal after `install.bat` if the `bagel` command is not immediately available.
 
 ## What It Does
 
@@ -67,35 +67,35 @@ The 2x2 image, GIF, and MP4 were generated directly from the bag by Codex using 
 Start the interactive shell:
 
 ```powershell
-ros2unbag
+bagel
 ```
 
 A short session looks like this:
 
 ```text
-ros2unbag> open .\my_bag
-ros2unbag> topics
-ros2unbag> scan --all
-ros2unbag> inspect --time 22.2 --dur /camera/image_raw
-ros2unbag> export /camera/image_raw --format mp4 --fps 30 --out .\export
-ros2unbag> export /points --format pcd --out .\export
-ros2unbag> gui
+bagel> open .\my_bag
+bagel> topics
+bagel> scan --all
+bagel> inspect --time 22.2 --dur /camera/image_raw
+bagel> export /camera/image_raw --format mp4 --fps 30 --out .\export
+bagel> export /points --format pcd --out .\export
+bagel> gui
 ```
 
 The same operations are available as direct commands:
 
 ```powershell
-ros2unbag scan .\my_bag --out .\scan
-ros2unbag export .\my_bag --topic /imu --format parquet --out .\export
-ros2unbag export .\my_bag --topic /camera/image_raw --format png --out .\export
-ros2unbag export .\my_bag --topic /points --format ply --out .\export
-ros2unbag export-all .\my_bag --out .\export
+bagel scan .\my_bag --out .\scan
+bagel export .\my_bag --topic /imu --format parquet --out .\export
+bagel export .\my_bag --topic /camera/image_raw --format png --out .\export
+bagel export .\my_bag --topic /points --format ply --out .\export
+bagel export-all .\my_bag --out .\export
 ```
 
 Upgrade an installed copy with:
 
 ```powershell
-ros2unbag upgrade --yes
+bagel upgrade --yes
 ```
 
 ## Export Notes
@@ -115,7 +115,7 @@ It is intentionally view-only: this is not a live ROS subscriber, recorder, node
 Run the GUI directly:
 
 ```powershell
-ros2unbag gui .\my_bag
+bagel gui .\my_bag
 ```
 
 ## Sample Data Provenance
@@ -124,7 +124,7 @@ The example bag used for the media above was produced with the open [aiformula-s
 
 Background on the outdoor autonomous-driving program is available from the [AI Formula development page](https://sites.google.com/p.chibakoudai.jp/rdc-lab/development/ai-formula). The bag is local debug data and is not distributed in this repository.
 
-These references describe data provenance and project context. They do not imply that the linked organizations maintain, endorse, or audit `ros2unbag`.
+These references describe data provenance and project context. They do not imply that the linked organizations maintain, endorse, or audit ROSBagel.
 
 ## Known Limits
 
@@ -148,4 +148,4 @@ Focused bug reports, edge-case notes, and small pull requests are welcome. See [
 
 ## License
 
-`ros2unbag` is released under `AGPL-3.0-or-later`. See [LICENSE](LICENSE).
+ROSBagel is released under `AGPL-3.0-or-later`. See [LICENSE](LICENSE).

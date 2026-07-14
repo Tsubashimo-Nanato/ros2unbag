@@ -8,9 +8,9 @@ from rich.markup import escape
 from rich.table import Table
 from rich.tree import Tree
 
-from ros2unbag.core.models import ExportResult, ExportSelection, TopicDuration, TopicInfo
-from ros2unbag.core.sync import InspectResult
-from ros2unbag.core.topic_tree import (
+from rosbagel.core.models import ExportResult, ExportSelection, TopicDuration, TopicInfo
+from rosbagel.core.sync import InspectResult
+from rosbagel.core.topic_tree import (
     TopicTreeNode,
     build_topic_tree,
     format_topic_compact,

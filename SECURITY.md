@@ -12,4 +12,4 @@ This project is maintained by an amateur developer and has not received a profes
 
 ## Data Privacy
 
-`ros2unbag` is intended to inspect local ROS bag files offline. ROS bags may contain camera images, sensor recordings, experiment metadata, paths, or other private lab data. Review exported files carefully before sharing them.
+ROSBagel is intended to inspect local ROS bag files offline. ROS bags may contain camera images, sensor recordings, experiment metadata, paths, or other private lab data. Review exported files carefully before sharing them.

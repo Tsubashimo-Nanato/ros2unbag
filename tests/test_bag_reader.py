@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from ros2unbag.core.bag_reader import open_bag_reader
-from ros2unbag.core.session import Session
+from rosbagel.core.bag_reader import open_bag_reader
+from rosbagel.core.session import Session
 
 
 class BagReaderTests(unittest.TestCase):
