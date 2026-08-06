@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for considering a contribution. This project is an initial public release maintained by an amateur developer, so small, focused improvements are especially welcome.
+Thanks for considering a contribution. Small, focused improvements are especially welcome.
 
 ## How to Contribute
 

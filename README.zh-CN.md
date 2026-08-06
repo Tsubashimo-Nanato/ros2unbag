@@ -7,14 +7,14 @@
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
 
-在 Windows 上直接打开 ROS 1/2 bag，检查里面有什么，再导出真正需要的数据，不必先把工作站临时改造成一套 ROS 环境。
+在 Windows 上直接打开 ROS 1/2 bag，检查其内容，并在无需完整安装 ROS 环境的情况下导出所需数据。
 
 ROSBagel 是一个离线、只读的 bag 检查与导出工具，终端命令为 `bagel`。它提供 CLI、交互式 shell，以及基于 PySide6 的时间线查看器，可用于图像、车道线点云、topic 元数据和同步预览。
 
 ![ROSBagel 时间线查看器](docs/media/gui-timeline.png)
 
 > [!NOTE]
-> CLI 和导出器已经可以投入实际使用。GUI 仍在积极开发中：交互和渲染会持续改进，欢迎趁那些别扭的边角还容易调整时提交问题。
+> CLI 和导出器已经可以投入实际使用。GUI 仍在积极开发中，交互和渲染会继续改进。
 
 ## 快速开始
 
@@ -58,9 +58,9 @@ install.bat gui
 
 ![标注结果和二值 mask 动画](docs/media/validation-run.gif)
 
-如果 GIF 不是你偏好的科学仪器，也可以[打开 MP4 预览](docs/media/validation-run.mp4)。
+[打开 MP4 预览](docs/media/validation-run.mp4)可获得一致的播放时序。
 
-2x2 图片、GIF 和 MP4 均由 Codex 使用 shell mode 直接从 bag 生成，没有用合成道路场景或手绘车道线替代真实数据。
+上方媒体均通过文档所述的导出流程从验证 bag 生成，使用的是记录帧，没有以合成道路场景或手绘车道线替代。
 
 ## 常用命令
 
@@ -108,7 +108,7 @@ bagel upgrade --yes
 
 ## GUI 开发状态
 
-时间线查看器是面向 Windows 的离线可视化工作区。目前开发重点包括可预测的 topic 分配、分屏、受限大小的图像播放缓存、车道线与点云导航，以及不需要和 dock 窗口摔跤的面板行为。
+时间线查看器是面向 Windows 的离线可视化工作区。目前开发重点包括可预测的 topic 分配、分屏、受限大小的图像播放缓存、车道线与点云导航，以及稳定的 dock 面板行为。
 
 它有意保持只读：这不是实时 ROS subscriber、recorder、节点图检查器或完整的 RViz2 替代品。可选的 3D 点云渲染还依赖可用的 VisPy/OpenGL 环境；即使该环境不可用，应用的其余部分仍可使用。
 
@@ -120,7 +120,7 @@ bagel gui .\my_bag
 
 ## 示例数据来源
 
-上述媒体使用的示例 bag 来自一次采用开源 [aiformula-support/aiformula](https://github.com/aiformula-support/aiformula) 技术栈、由 [SophiaControl/AIformula_sophia](https://github.com/SophiaControl/AIformula_sophia) 完成的验证 run。
+上述媒体使用的示例 bag 来自一次采用开源 [aiformula-support/aiformula](https://github.com/aiformula-support/aiformula) 技术栈、由 [Sophia-AI-formula-team/aiformula_sophia](https://github.com/Sophia-AI-formula-team/aiformula_sophia) 完成的验证 run。
 
 室外自动驾驶项目的背景资料可参阅 [AI Formula 开发页面](https://sites.google.com/p.chibakoudai.jp/rdc-lab/development/ai-formula)。该 bag 仅作为本地调试数据，不随本仓库分发。
 
@@ -135,9 +135,7 @@ bagel gui .\my_bag
 - 大尺寸、高分辨率图像 topic 在刷新受限播放窗口时可能短暂停顿。
 - Bag 可能包含私有相机、传感器、地图或实验室数据，请在发布导出内容前完成检查。
 
-## 开发披露
-
-本项目在实现、重构、测试、文档，以及上文展示的 shell-mode 媒体工作流中使用了大量 AI 辅助。最终集成、审查和发布批准仍由维护者负责；这些审查不构成专业安全审计。
+## 维护者
 
 维护者：Owen Zi-Wen ZHOU<br>
 所属：Sophia University，Control Engineering / AI Formula

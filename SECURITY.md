@@ -8,7 +8,7 @@ This repository is currently in an initial public release state. Security fixes,
 
 Please avoid posting sensitive details publicly if you believe you found a security issue. Open a GitHub issue with a brief, non-sensitive summary and request a private discussion path with the maintainer.
 
-This project is maintained by an amateur developer and has not received a professional security audit. Reports and suggestions are welcome.
+Security reports and suggestions are welcome. Releases are maintained and tested by the project maintainer, but the project has not undergone an independent security audit.
 
 ## Data Privacy
 

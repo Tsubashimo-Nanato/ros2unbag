@@ -7,14 +7,14 @@ English | [简体中文](README.zh-CN.md)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
 
-Open ROS 1/2 bags on Windows, inspect what is inside, and export the useful parts without first turning your workstation into a temporary ROS installation.
+Open ROS 1/2 bags on Windows, inspect their contents, and export selected data without installing a full ROS environment.
 
 ROSBagel is an offline, read-only bag inspector and exporter. Its terminal command is `bagel`. It provides a CLI, an interactive shell, and a PySide6 timeline viewer for images, lane-line point clouds, topic metadata, and synchronized previews.
 
 ![ROSBagel Timeline Viewer](docs/media/gui-timeline.png)
 
 > [!NOTE]
-> The CLI and exporters are usable today. The GUI is under active development: expect regular interaction and rendering improvements, and please report the awkward edges while they are still easy to move.
+> The CLI and exporters are usable today. The GUI is under active development, so interaction and rendering behavior may change between releases.
 
 ## Quick Start
 
@@ -58,9 +58,9 @@ The same run in motion:
 
 ![Annotated and binary mask animation](docs/media/validation-run.gif)
 
-[Open the MP4 preview](docs/media/validation-run.mp4) if GIF timing is not your preferred scientific instrument.
+[Open the MP4 preview](docs/media/validation-run.mp4) for consistent playback timing.
 
-The 2x2 image, GIF, and MP4 were generated directly from the bag by Codex using shell mode. No synthetic road scene or hand-drawn lane data was substituted.
+The media above was generated from the validation bag using the documented export workflow. It uses recorded frames; no synthetic road scene or hand-drawn lane data was substituted.
 
 ## Common Commands
 
@@ -108,7 +108,7 @@ bagel upgrade --yes
 
 ## GUI Development
 
-The timeline viewer is a Windows-oriented, offline visualization workspace. Current work focuses on predictable topic assignment, split views, bounded image playback caches, lane-line and point-cloud navigation, and dock behavior that does not require a wrestling match.
+The timeline viewer is a Windows-oriented, offline visualization workspace. Current work focuses on predictable topic assignment, split views, bounded image playback caches, lane-line and point-cloud navigation, and stable dock behavior.
 
 It is intentionally view-only: this is not a live ROS subscriber, recorder, node-graph inspector, or full RViz2 replacement. The optional 3D point-cloud renderer also depends on working VisPy/OpenGL support; the rest of the application remains usable without it.
 
@@ -120,7 +120,7 @@ bagel gui .\my_bag
 
 ## Sample Data Provenance
 
-The example bag used for the media above was produced with the open [aiformula-support/aiformula](https://github.com/aiformula-support/aiformula) stack during a validation run by [SophiaControl/AIformula_sophia](https://github.com/SophiaControl/AIformula_sophia).
+The example bag used for the media above was produced with the open [aiformula-support/aiformula](https://github.com/aiformula-support/aiformula) stack during a validation run by [Sophia-AI-formula-team/aiformula_sophia](https://github.com/Sophia-AI-formula-team/aiformula_sophia).
 
 Background on the outdoor autonomous-driving program is available from the [AI Formula development page](https://sites.google.com/p.chibakoudai.jp/rdc-lab/development/ai-formula). The bag is local debug data and is not distributed in this repository.
 
@@ -135,9 +135,7 @@ These references describe data provenance and project context. They do not imply
 - Large, high-resolution GUI image topics can pause briefly when a bounded playback window refreshes.
 - Bags may contain private camera, sensor, map, or laboratory data. Review exports before publishing them.
 
-## Development Disclosure
-
-This project has received significant AI assistance for implementation, refactoring, testing, documentation, and the shell-mode media workflow shown above. Final integration, review, and release approval remain the maintainer's responsibility; that review is not a professional security audit.
+## Maintainer
 
 Maintainer: Owen Zi-Wen ZHOU<br>
 Affiliation: Sophia University, Control Engineering / AI Formula

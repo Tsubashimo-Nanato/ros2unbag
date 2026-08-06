@@ -47,7 +47,7 @@ dev = ["pytest>=8.0"]
 
 [project.urls]
 "Repository" = "https://github.com/Tsubashimo-Nanato/ROSBagel"
-"Related Lab Repository" = "https://github.com/SophiaControl/AIformula_sophia"
+"Related Lab Repository" = "https://github.com/Sophia-AI-formula-team/aiformula_sophia"
 
 [project.scripts]
 bagel = "rosbagel.cli.main:app"

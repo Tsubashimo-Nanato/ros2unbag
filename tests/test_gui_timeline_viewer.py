@@ -523,20 +523,20 @@ class GuiTimelineViewerTests(unittest.TestCase):
             viewer.window.close()
 
     def test_default_theme_is_dark_without_saved_preference(self) -> None:
-        settings = QtCore.QSettings("TsubashimoNanato", "rosbagel")
-        previous = settings.value("ui/theme", "")
-        settings.remove("ui/theme")
-        viewer = TimelineViewer()
-        try:
-            self.assertEqual(viewer._theme, "dark")
-            self.assertTrue(viewer._theme_actions["dark"].isChecked())
-            self.assertIn("#101010", viewer.window.styleSheet())
-        finally:
-            viewer.window.close()
-            if previous:
-                settings.setValue("ui/theme", previous)
-            else:
-                settings.remove("ui/theme")
+        with patch.object(QtCore, "QSettings") as settings_class:
+            settings_class.return_value.value.side_effect = (
+                lambda key, default="": "off" if key == "updates/mode" else default
+            )
+            viewer = TimelineViewer()
+            try:
+                self.assertEqual(viewer._theme, "dark")
+                self.assertTrue(viewer._theme_actions["dark"].isChecked())
+                self.assertIn("#101010", viewer.window.styleSheet())
+            finally:
+                viewer.window.close()
+
+        settings_class.assert_called_once_with("TsubashimoNanato", "rosbagel")
+        settings_class.return_value.value.assert_any_call("ui/theme", "")
 
     def test_update_check_starts_background_job(self) -> None:
         viewer = TimelineViewer()
