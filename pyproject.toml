@@ -10,10 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "AGPL-3.0-or-later" }
 authors = [
-  { name = "Owen Zi-Wen ZHOU" }
+  { name = "Owen ZI-WEN ZHOU" }
 ]
 maintainers = [
-  { name = "Owen Zi-Wen ZHOU" }
+  { name = "Owen ZI-WEN ZHOU" }
 ]
 keywords = ["ros", "ros2", "rosbag", "robotics", "export", "inspection"]
 classifiers = [

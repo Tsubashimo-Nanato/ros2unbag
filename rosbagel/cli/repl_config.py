@@ -7,6 +7,7 @@ COMMANDS = [
     "open",
     "close",
     "scan",
+    "manifest",
     "topics",
     "export",
     "export-select",
@@ -24,6 +25,7 @@ COMMANDS = [
 OPTIONS_BY_COMMAND = {
     "open": ["--backend"],
     "scan": ["--all", "-all", "--out", "-o"],
+    "manifest": ["--out", "-o", "--backend"],
     "topics": ["-all", "--all", "-s", "--select"],
     "export": ["--topic", "-t", "--format", "-f", "--out", "-o", "--fps"],
     "export-select": ["--topic", "-t", "--format", "-f", "--out", "-o", "--fps"],

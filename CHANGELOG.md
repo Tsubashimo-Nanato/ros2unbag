@@ -2,6 +2,21 @@
 
 All notable changes for this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added shell completion for `scan --all`, `scan --out`, and output paths.
+- Added the interactive `manifest` command with bag path, backend, and output-path completion.
+- Expanded the shell welcome with the current version, author, license, and repository.
+
+### Fixed
+
+- Report invalid or unreadable bag paths as concise command errors instead of Python tracebacks.
+- Keep the interactive shell open after malformed quoted input and report the parse error inline.
+- Keep split views inside the `1280x760` default layout with compact, accessible topic and pane controls.
+- Use one coordinate transform for lane-line points, tick labels, and zero axes while preserving equal x/y scale and fit margin.
+
 ## [1.6.2] - 2026-07-14
 
 ### Changed

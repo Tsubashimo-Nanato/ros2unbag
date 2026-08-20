@@ -86,9 +86,15 @@ def main(ctx: typer.Context) -> None:
 
 
 def _open_session_with_progress(session: Session, bag_path: Path) -> int:
-    with progress_task("Opening bag", None) as advance:
-        topics = session.open_bag(bag_path)
-        advance()
+    if not bag_path.exists():
+        raise typer.BadParameter(f"Bag path does not exist: {bag_path}")
+
+    try:
+        with progress_task("Opening bag", None) as advance:
+            topics = session.open_bag(bag_path)
+            advance()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(f"Could not open bag '{bag_path}': {exc}") from exc
     return len(topics)
 
 

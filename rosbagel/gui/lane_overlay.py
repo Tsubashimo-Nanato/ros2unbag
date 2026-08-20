@@ -55,7 +55,7 @@ def create_lane_overlay_panel_class(
             self._pan_start_bounds: LaneBounds | None = None
             self.setFont(QtGui.QFont("Segoe UI", 9))
             self.setMouseTracking(True)
-            self.setMinimumSize(300, 260)
+            self.setMinimumSize(300, 180)
 
         @property
         def current_timestamp_ns(self) -> int | None:
@@ -182,15 +182,26 @@ def create_lane_overlay_panel_class(
             plot_rect = self._plot_rect(self.rect())
             data_width = max(1e-9, bounds.max_x - bounds.min_x)
             data_height = max(1e-9, bounds.max_y - bounds.min_y)
-            scale = min(plot_rect.width() / data_width, plot_rect.height() / data_height)
+            available_width = max(
+                1.0,
+                plot_rect.width() - (2.0 * LANE_PLOT_FIT_MARGIN_PX),
+            )
+            available_height = max(
+                1.0,
+                plot_rect.height() - (2.0 * LANE_PLOT_FIT_MARGIN_PX),
+            )
+            scale = min(available_width / data_width, available_height / data_height)
             if scale <= 0.0:
                 return bounds
-            margin = LANE_PLOT_FIT_MARGIN_PX / scale
+            center_x = (bounds.min_x + bounds.max_x) / 2.0
+            center_y = (bounds.min_y + bounds.max_y) / 2.0
+            fitted_width = plot_rect.width() / scale
+            fitted_height = plot_rect.height() / scale
             return LaneBounds(
-                min_x=bounds.min_x - margin,
-                max_x=bounds.max_x + margin,
-                min_y=bounds.min_y - margin,
-                max_y=bounds.max_y + margin,
+                min_x=center_x - (fitted_width / 2.0),
+                max_x=center_x + (fitted_width / 2.0),
+                min_y=center_y - (fitted_height / 2.0),
+                max_y=center_y + (fitted_height / 2.0),
             )
 
         def _current_frames(self) -> list[tuple[LaneSeries, LaneFrame]]:
