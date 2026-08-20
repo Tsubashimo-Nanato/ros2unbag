@@ -70,6 +70,10 @@ class CliMetadataTests(unittest.TestCase):
 
         self.assertEqual(rosbagel.__version__, metadata["project"]["version"])
         self.assertEqual(metadata["project"]["name"], "ROSBagel")
+        self.assertEqual(metadata["project"]["authors"], [{"name": "Owen ZI-WEN ZHOU"}])
+        self.assertEqual(metadata["project"]["maintainers"], [{"name": "Owen ZI-WEN ZHOU"}])
+        self.assertEqual(metadata["project"]["license"], {"text": "AGPL-3.0-or-later"})
+        self.assertIn("Copyright (C) 2026 Owen ZI-WEN ZHOU", (root / "LICENSE").read_text())
         self.assertEqual(
             metadata["project"]["scripts"],
             {"bagel": "rosbagel.cli.main:app"},

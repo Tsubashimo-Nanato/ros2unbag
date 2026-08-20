@@ -6,6 +6,8 @@ import time
 from rich.console import Console
 from rich.prompt import Confirm
 
+from rosbagel import __version__
+
 
 LOGO = (
     " ____   ___  ____  ____                  _",
@@ -15,6 +17,10 @@ LOGO = (
     "|_| \\_\\___/|____/|____/ \\__,_|\\__, |\\___|_|",
     "                                  |___/",
 )
+DESCRIPTION = "Offline ROS 1/2 bag inspection, export, and visualization on Windows."
+AUTHOR = "Owen ZI-WEN ZHOU, also known online as Nanato."
+LICENSE = "AGPL-3.0-or-later"
+REPOSITORY = "github.com/Tsubashimo-Nanato/ROSBagel"
 
 
 def show_welcome(
@@ -32,7 +38,12 @@ def show_welcome(
         if delay:
             sleep(delay)
 
-    console.print("Inspect the bag. Keep the source untouched.", style="dim")
+    console.print(f"ROSBagel v{__version__}", style="bold #f59e0b")
+    console.print()
+    console.print(DESCRIPTION, style="#d4d4d4")
+    console.print(f"Author: {AUTHOR}", style="dim")
+    console.print(f"License: {LICENSE}", style="dim")
+    console.print(f"Repository: {REPOSITORY}", style="dim")
     console.print()
     return confirm(
         "Open the GUI [dim](in development)[/dim]?",

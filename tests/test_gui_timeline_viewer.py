@@ -102,7 +102,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
             pane.split_button.click()
 
             self.assertEqual(len(viewer._panes), 2)
-            self.assertEqual(viewer._panes[1].title_label.text(), "View 2: Drop topic here")
+            self.assertEqual(viewer._panes[1].title_label.text(), "View 2")
             self.assertFalse(viewer._panes[0].property("active"))
             self.assertTrue(viewer._panes[1].property("active"))
         finally:
@@ -135,7 +135,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
             top = viewer.topic_tree.topLevelItem(0)
             self.assertIsNotNone(top)
             self.assertFalse(top.isExpanded())
-            self.assertEqual(viewer._panes[0].title_label.text(), "View 1: Drop topic here")
+            self.assertEqual(viewer._panes[0].title_label.text(), "View 1")
             self.assertGreaterEqual(viewer.topic_tree.columnWidth(0), 150)
         finally:
             viewer.window.close()
@@ -144,9 +144,12 @@ class GuiTimelineViewerTests(unittest.TestCase):
         viewer = TimelineViewer()
         try:
             self.assertEqual(viewer.topic_search.placeholderText(), "Search topics")
-            self.assertEqual(viewer.topic_expand_button.text(), "Expand")
-            self.assertEqual(viewer.topic_collapse_button.text(), "Collapse")
-            self.assertEqual(viewer.topic_uncheck_button.text(), "Uncheck all")
+            self.assertEqual(viewer.topic_expand_button.accessibleName(), "Expand all")
+            self.assertEqual(viewer.topic_collapse_button.accessibleName(), "Collapse all")
+            self.assertEqual(viewer.topic_uncheck_button.accessibleName(), "Uncheck all")
+            self.assertTrue(viewer.topic_expand_button.toolTip())
+            self.assertTrue(viewer.topic_collapse_button.toolTip())
+            self.assertTrue(viewer.topic_uncheck_button.toolTip())
             self.assertIs(viewer.topic_dock.widget(), viewer.topic_panel)
         finally:
             viewer.window.close()
@@ -379,7 +382,8 @@ class GuiTimelineViewerTests(unittest.TestCase):
         viewer = TimelineViewer()
         try:
             pane = viewer._panes[0]
-            self.assertEqual(pane.new_window_button.text(), "Duplicate")
+            self.assertEqual(pane.new_window_button.accessibleName(), "Duplicate window")
+            self.assertTrue(pane.new_window_button.toolTip())
             self.assertTrue(callable(viewer.duplicate_pane_window))
         finally:
             viewer.window.close()
@@ -464,7 +468,33 @@ class GuiTimelineViewerTests(unittest.TestCase):
             ]
             viewer._populate_topics()
             self.assertGreaterEqual(viewer._preferred_topic_width(), 360)
-            self.assertGreaterEqual(viewer.topic_tree.minimumWidth(), 360)
+            self.assertGreaterEqual(viewer._topic_width_target(), 360)
+            self.assertEqual(viewer.topic_tree.minimumWidth(), 240)
+        finally:
+            viewer.window.close()
+
+    def test_split_view_uses_compact_topic_navigation_width(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.session.reader = DummyReader()  # type: ignore[assignment]
+            viewer.session.topics = [
+                TopicInfo(
+                    name="/aiformula_perception/road_detector/annotated_mask_image",
+                    msgtype="sensor_msgs/msg/Image",
+                    category="mask_candidate",
+                    message_count=1809,
+                ),
+            ]
+            viewer._populate_topics()
+            self.assertGreater(viewer._preferred_topic_width(), 320)
+
+            viewer.split_pane(viewer._panes[0], "horizontal")
+
+            self.assertEqual(viewer._topic_width_target(), 240)
+            self.assertEqual(viewer.topic_tree.minimumWidth(), 240)
+            self.assertEqual(viewer.topic_dock.minimumWidth(), 240)
+            self.assertLessEqual(viewer.window.minimumSizeHint().width(), 1280)
+            self.assertLessEqual(viewer.window.minimumSizeHint().height(), 760)
         finally:
             viewer.window.close()
 
@@ -750,13 +780,38 @@ class GuiTimelineViewerTests(unittest.TestCase):
             first_bounds = plot._view_bounds
 
             self.assertIsNotNone(first_bounds)
-            self.assertLess(first_bounds.max_y, 2.0)
+            self.assertLess(first_bounds.max_y, 100.0)
 
             viewer.lane_overlay.show_at_timestamp(200)
             second_bounds = plot._view_bounds
 
             self.assertIsNotNone(second_bounds)
             self.assertGreater(second_bounds.min_y, 480.0)
+        finally:
+            viewer.window.close()
+
+    def test_lane_plot_auto_fit_matches_plot_aspect_ratio(self) -> None:
+        viewer = TimelineViewer()
+        try:
+            viewer.lane_overlay.set_topics({
+                "center": _lane_topic("center"),
+                "left": _lane_topic("left"),
+                "right": _lane_topic("right"),
+            })
+            viewer.lane_overlay.set_data(_lane_overlay_data())
+            viewer.lane_overlay.show_at_timestamp(100)
+            plot = viewer.lane_overlay.plot
+            plot.resize(480, 320)
+            plot.reset_view()
+            bounds = plot._active_bounds()
+            plot_rect = plot._plot_rect(plot.rect())
+
+            self.assertIsNotNone(bounds)
+            bounds_ratio = (bounds.max_x - bounds.min_x) / (bounds.max_y - bounds.min_y)
+            self.assertAlmostEqual(bounds_ratio, plot_rect.width() / plot_rect.height(), places=6)
+            _scale, x_pad, y_pad = plot._plot_transform(plot_rect, bounds)
+            self.assertAlmostEqual(x_pad, 0.0, places=6)
+            self.assertAlmostEqual(y_pad, 0.0, places=6)
         finally:
             viewer.window.close()
 

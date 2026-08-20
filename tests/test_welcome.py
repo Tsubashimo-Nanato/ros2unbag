@@ -5,7 +5,15 @@ import unittest
 
 from rich.console import Console
 
-from rosbagel.cli.welcome import LOGO, show_welcome
+from rosbagel import __version__
+from rosbagel.cli.welcome import (
+    AUTHOR,
+    DESCRIPTION,
+    LICENSE,
+    LOGO,
+    REPOSITORY,
+    show_welcome,
+)
 
 
 class WelcomeTests(unittest.TestCase):
@@ -24,7 +32,12 @@ class WelcomeTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertFalse(requested_gui)
         self.assertIn(LOGO[0], rendered)
-        self.assertIn("Keep the source untouched", rendered)
+        self.assertIn(f"ROSBagel v{__version__}", rendered)
+        self.assertIn(DESCRIPTION, rendered)
+        self.assertIn(f"Author: {AUTHOR}", rendered)
+        self.assertIn(f"License: {LICENSE}", rendered)
+        self.assertIn(f"Repository: {REPOSITORY}", rendered)
+        self.assertNotIn("Keep the source untouched", rendered)
         self.assertIn("GUI", str(captured["prompt"]))
         self.assertFalse(captured["default"])
 

@@ -37,6 +37,7 @@ from rosbagel.gui.theme import theme_stylesheet as _theme_stylesheet
 TOPIC_MIME = "application/x-rosbagel-topic"
 TOPICS_MIME = "application/x-rosbagel-topics"
 IMAGE_CATEGORIES = {"image", "compressed_image", "mask_candidate"}
+COMPACT_TOPIC_WIDTH = 240
 
 
 class TimelineViewer:
@@ -256,10 +257,14 @@ class TimelineViewer:
             self._maximized_pane = None
             for item in self._panes:
                 item.setVisible(True)
+            self._update_topic_minimum_width()
+            self._queue_autosize_docks()
             return
         self._maximized_pane = pane
         for item in self._panes:
             item.setVisible(item is pane)
+        self._update_topic_minimum_width()
+        self._queue_autosize_docks()
 
     def delete_pane(self, pane: Any) -> None:
         if pane in self._window_panes:
@@ -328,7 +333,7 @@ class TimelineViewer:
         self.topic_tree.itemSelectionChanged.connect(self._on_topic_selection_changed)
         self.topic_tree.itemDoubleClicked.connect(self._on_topic_double_clicked)
         self.topic_tree.itemChanged.connect(self._on_topic_item_changed)
-        self.topic_tree.setMinimumWidth(260)
+        self.topic_tree.setMinimumWidth(COMPACT_TOPIC_WIDTH)
         self.topic_tree.setRootIsDecorated(True)
         self.topic_tree.setItemsExpandable(True)
         self.topic_tree.setExpandsOnDoubleClick(True)
@@ -346,17 +351,36 @@ class TimelineViewer:
         self.topic_search = QtWidgets.QLineEdit()
         self.topic_search.setPlaceholderText("Search topics")
         self.topic_search.setClearButtonEnabled(True)
+        self.topic_search.setMinimumWidth(96)
         self.topic_search.textChanged.connect(self._filter_topic_tree)
+        toolbar_icon_size = QtCore.QSize(16, 16)
+        toolbar_button_size = QtCore.QSize(30, 26)
+        window_style = self.window.style()
         self.topic_expand_button = QtWidgets.QToolButton()
-        self.topic_expand_button.setText("Expand")
+        self.topic_expand_button.setIcon(
+            window_style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ArrowDown)
+        )
+        self.topic_expand_button.setIconSize(toolbar_icon_size)
+        self.topic_expand_button.setFixedSize(toolbar_button_size)
+        self.topic_expand_button.setAccessibleName("Expand all")
         self.topic_expand_button.setToolTip("Expand all topic groups")
         self.topic_expand_button.clicked.connect(self._expand_topic_tree)
         self.topic_collapse_button = QtWidgets.QToolButton()
-        self.topic_collapse_button.setText("Collapse")
+        self.topic_collapse_button.setIcon(
+            window_style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ArrowUp)
+        )
+        self.topic_collapse_button.setIconSize(toolbar_icon_size)
+        self.topic_collapse_button.setFixedSize(toolbar_button_size)
+        self.topic_collapse_button.setAccessibleName("Collapse all")
         self.topic_collapse_button.setToolTip("Collapse all topic groups")
         self.topic_collapse_button.clicked.connect(self._collapse_topic_tree)
         self.topic_uncheck_button = QtWidgets.QToolButton()
-        self.topic_uncheck_button.setText("Uncheck all")
+        self.topic_uncheck_button.setIcon(
+            window_style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogResetButton)
+        )
+        self.topic_uncheck_button.setIconSize(toolbar_icon_size)
+        self.topic_uncheck_button.setFixedSize(toolbar_button_size)
+        self.topic_uncheck_button.setAccessibleName("Uncheck all")
         self.topic_uncheck_button.setToolTip("Clear all checked topics")
         self.topic_uncheck_button.clicked.connect(self._uncheck_topic_tree)
         topic_toolbar.addWidget(self.topic_search, 1)
@@ -469,7 +493,7 @@ class TimelineViewer:
         output_layout.addWidget(self.progress_bar)
         self.log_text = QtWidgets.QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMinimumHeight(100)
+        self.log_text.setMinimumHeight(60)
         output_layout.addWidget(self.log_text, 1)
 
         self.lane_overlay = self.LaneOverlayPanel(
@@ -514,10 +538,10 @@ class TimelineViewer:
             output_panel,
             QtCore.Qt.DockWidgetArea.BottomDockWidgetArea,
         )
-        self.topic_dock.setMinimumWidth(320)
+        self.topic_dock.setMinimumWidth(COMPACT_TOPIC_WIDTH)
         self.main_view_dock.setMinimumWidth(380)
         self.lane_overlay_dock.setMinimumWidth(300)
-        self.lane_overlay_dock.setMinimumHeight(280)
+        self.lane_overlay_dock.setMinimumHeight(220)
         self.properties_dock.setMinimumWidth(220)
         self.window.splitDockWidget(
             self.main_view_dock,
@@ -652,6 +676,7 @@ class TimelineViewer:
             column = index % self._grid_cols
             self.view_grid.addWidget(pane, row, column)
             pane.setVisible(self._maximized_pane is None or pane is self._maximized_pane)
+        self._update_topic_minimum_width()
         self._refresh_pane_chrome()
         self._queue_autosize_docks()
 
@@ -717,12 +742,12 @@ class TimelineViewer:
     ) -> dict[str, int]:
         available = max(640, self.window.width() - 28)
         targets = {
-            "topic": self._preferred_topic_width() if has_topic else 0,
+            "topic": self._topic_width_target() if has_topic else 0,
             "main": 520 if has_main else 0,
             "properties": 260 if has_properties else 0,
         }
         minimums = {
-            "topic": 320 if has_topic else 0,
+            "topic": COMPACT_TOPIC_WIDTH if has_topic else 0,
             "main": 380 if has_main else 0,
             "properties": 220 if has_properties else 0,
         }
@@ -744,6 +769,18 @@ class TimelineViewer:
             return 340
         max_width = max(420, int(self.window.width() * 0.38))
         return max(320, min(max_width, sum(columns) + 26))
+
+    def _topic_width_target(self) -> int:
+        visible_panes = sum(1 for pane in self._panes if not pane.isHidden())
+        if visible_panes > 1:
+            return COMPACT_TOPIC_WIDTH
+        return self._preferred_topic_width()
+
+    def _update_topic_minimum_width(self) -> None:
+        if hasattr(self, "topic_tree"):
+            self.topic_tree.setMinimumWidth(COMPACT_TOPIC_WIDTH)
+        if hasattr(self, "topic_dock"):
+            self.topic_dock.setMinimumWidth(COMPACT_TOPIC_WIDTH)
 
     def _preferred_topic_column_widths(self) -> list[int]:
         if not hasattr(self, "topic_tree"):
@@ -1001,8 +1038,7 @@ class TimelineViewer:
         widths = self._preferred_topic_column_widths()
         for column, width in enumerate(widths):
             self.topic_tree.setColumnWidth(column, width)
-        if hasattr(self, "topic_tree"):
-            self.topic_tree.setMinimumWidth(self._preferred_topic_width())
+        self._update_topic_minimum_width()
 
     def _load_metadata_time_bounds(self) -> None:
         reader = self.session.reader
@@ -1925,28 +1961,57 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             top_bar.setContentsMargins(0, 0, 0, 0)
             self.title_label = QtWidgets.QLabel("Drop topic here")
             self.title_label.setObjectName("viewTitle")
+            self.title_label.setMinimumWidth(56)
+            self.title_label.setSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Ignored,
+                QtWidgets.QSizePolicy.Policy.Preferred,
+            )
             self.render_button = QtWidgets.QToolButton()
             self.render_button.setText("Render")
+            self.render_button.setFixedSize(58, 26)
             self.split_button = QtWidgets.QToolButton()
             self.split_button.setText("+")
+            self.split_button.setFixedSize(28, 26)
             self.split_button.setToolTip("Split this view")
             self.xy_button = QtWidgets.QToolButton()
             self.xy_button.setText("XY")
+            self.xy_button.setFixedSize(34, 26)
             self.xy_button.setCheckable(True)
             self.xy_button.setEnabled(False)
             self.xy_button.setToolTip("Swap x/y axes for lane line plots")
             self.view_help_button = QtWidgets.QToolButton()
             self.view_help_button.setObjectName("viewHelpIndicator")
             self.view_help_button.setText("?")
+            self.view_help_button.setFixedSize(28, 26)
             self.view_help_button.setAutoRaise(True)
             self.view_help_button.setVisible(False)
+            pane_icon_size = QtCore.QSize(16, 16)
+            pane_button_size = QtCore.QSize(28, 26)
+            pane_style = self.style()
             self.max_button = QtWidgets.QToolButton()
-            self.max_button.setText("Max")
+            self.max_button.setIcon(
+                pane_style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_TitleBarMaxButton)
+            )
+            self.max_button.setIconSize(pane_icon_size)
+            self.max_button.setFixedSize(pane_button_size)
+            self.max_button.setAccessibleName("Maximize view")
+            self.max_button.setToolTip("Maximize or restore this view")
             self.new_window_button = QtWidgets.QToolButton()
-            self.new_window_button.setText("Duplicate")
+            self.new_window_button.setIcon(
+                pane_style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_TitleBarNormalButton)
+            )
+            self.new_window_button.setIconSize(pane_icon_size)
+            self.new_window_button.setFixedSize(pane_button_size)
+            self.new_window_button.setAccessibleName("Duplicate window")
             self.new_window_button.setToolTip("Open a duplicate of this view in a separate window")
             self.delete_button = QtWidgets.QToolButton()
-            self.delete_button.setText("X")
+            self.delete_button.setIcon(
+                pane_style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_TitleBarCloseButton)
+            )
+            self.delete_button.setIconSize(pane_icon_size)
+            self.delete_button.setFixedSize(pane_button_size)
+            self.delete_button.setAccessibleName("Close view")
+            self.delete_button.setToolTip("Close this view")
             top_bar.addWidget(self.title_label, 1)
             top_bar.addWidget(self.view_help_button)
             top_bar.addWidget(self.render_button)
@@ -1958,15 +2023,25 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             layout.addLayout(top_bar)
 
             self.stack = QtWidgets.QStackedWidget()
-            self.image_label = QtWidgets.QLabel("Drop an image topic or select a topic.")
+            self.image_label = QtWidgets.QLabel("Drop a topic here.")
             self.image_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-            self.image_label.setMinimumSize(320, 220)
+            self.image_label.setMinimumSize(320, 160)
             self.point_renderer = create_point_cloud_renderer(QtWidgets)
             self.point_widget = self.point_renderer.widget()
             self.lane_plot = owner.LaneOverlayPanel.PlotWidget(self)
             self.lane_plot.set_empty_text("Drop a lane line PointCloud2 topic here.")
             self.raw_text = QtWidgets.QTextEdit()
             self.raw_text.setReadOnly(True)
+            for content_widget in (
+                self.image_label,
+                self.point_widget,
+                self.lane_plot,
+                self.raw_text,
+            ):
+                content_widget.setSizePolicy(
+                    QtWidgets.QSizePolicy.Policy.Ignored,
+                    QtWidgets.QSizePolicy.Policy.Ignored,
+                )
             self.stack.addWidget(self.image_label)
             self.stack.addWidget(self.point_widget)
             self.stack.addWidget(self.lane_plot)
@@ -2039,8 +2114,8 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
 
         def _refresh_title(self) -> None:
             if self.topic is None:
-                self.title_label.setText(f"{self.view_title}: Drop topic here")
-                self.title_label.setToolTip("")
+                self.title_label.setText(self.view_title)
+                self.title_label.setToolTip("Drop a topic here")
                 return
             leaf = self.topic.rsplit("/", 1)[-1]
             category = self.topic_info.category if self.topic_info is not None else "topic"

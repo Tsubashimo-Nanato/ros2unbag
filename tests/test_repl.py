@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from prompt_toolkit.document import Document
 
@@ -10,10 +11,12 @@ from rosbagel.cli.parsing import parse_inspect_time
 from rosbagel.cli.repl import (
     ExportSelectCompleter,
     BagelCompleter,
+    _handle_manifest,
     _selection_from_args,
+    dispatch_repl_line,
     split_repl_line,
 )
-from rosbagel.core.models import TopicInfo
+from rosbagel.core.models import Manifest, TopicInfo
 from rosbagel.core.session import Session
 
 
@@ -149,14 +152,79 @@ class ReplTests(unittest.TestCase):
 
         self.assertEqual([item.text for item in completions], ["-all ", "-s "])
 
-    def test_scan_completion_prefers_all_when_bag_is_open(self) -> None:
+    def test_scan_completion_offers_all_and_out_when_bag_is_open(self) -> None:
         session = Session()
         session.reader = object()  # type: ignore[assignment]
         completer = BagelCompleter(session)
 
         completions = list(completer.get_completions(Document("scan "), object()))
 
-        self.assertEqual([item.text for item in completions], ["--all "])
+        self.assertEqual([item.text for item in completions], ["--all ", "--out "])
+
+    def test_scan_out_completes_output_paths(self) -> None:
+        completer = BagelCompleter(Session())
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "scan_output"
+            output_dir.mkdir()
+            completions = list(
+                completer.get_completions(
+                    Document(f"scan --out {Path(temp_dir) / 'scan_'}"),
+                    object(),
+                )
+            )
+
+        self.assertEqual(len(completions), 1)
+        self.assertIn("scan_output", completions[0].text)
+
+    def test_manifest_completion_offers_command_out_and_paths(self) -> None:
+        session = Session()
+        session.reader = object()  # type: ignore[assignment]
+        completer = BagelCompleter(session)
+
+        command = list(completer.get_completions(Document("mani"), object()))
+        out_option = list(completer.get_completions(Document("manifest "), object()))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "manifests"
+            output_dir.mkdir()
+            paths = list(
+                completer.get_completions(
+                    Document(f"manifest --out {Path(temp_dir) / 'mani'}"),
+                    object(),
+                )
+            )
+
+        self.assertEqual([item.text for item in command], ["manifest"])
+        self.assertEqual([item.text for item in out_option], ["--out "])
+        self.assertEqual(len(paths), 1)
+        self.assertIn("manifests", paths[0].text)
+
+    def test_manifest_handler_writes_current_bag_manifest(self) -> None:
+        session = Mock()
+        session.scan.return_value = Manifest(source_bag_path="bag", created_at="now")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "reports" / "manifest.json"
+            _handle_manifest(session, ["--out", str(output_path)])
+
+            self.assertTrue(output_path.exists())
+
+        session.scan.assert_called_once()
+
+    def test_manifest_handler_requires_output_path(self) -> None:
+        session = Mock()
+
+        with self.assertRaisesRegex(ValueError, "Usage: manifest"):
+            _handle_manifest(session, [])
+
+    def test_malformed_command_reports_error_without_exiting_shell(self) -> None:
+        with patch("rosbagel.cli.repl.console.print") as print_mock:
+            should_exit = dispatch_repl_line(Session(), 'scan "')
+
+        rendered = " ".join(str(call.args[0]) for call in print_mock.call_args_list)
+        self.assertFalse(should_exit)
+        self.assertIn("Could not parse input", rendered)
 
     def test_upgrade_completion_offers_source_values(self) -> None:
         completer = BagelCompleter(Session())

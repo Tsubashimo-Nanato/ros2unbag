@@ -110,7 +110,15 @@ class BagelCompleter(Completer):
             if not positionals and (self.session.reader is None or current):
                 yield from _complete_paths(current)
             elif not positionals and not options and not current:
-                yield from _complete_option_values(["--all"], current)
+                yield from _complete_option_values(["--all", "--out"], current)
+            else:
+                yield from _complete_option_values(_available_options(command, args), current)
+            return
+        if command == "manifest":
+            if not positionals and (self.session.reader is None or current):
+                yield from _complete_paths(current)
+            elif "--out" not in options and "-o" not in options:
+                yield from _complete_option_values(["--out"], current)
             else:
                 yield from _complete_option_values(_available_options(command, args), current)
             return

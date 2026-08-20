@@ -95,13 +95,13 @@ def _run_plain_repl(session: Session) -> None:
 
 
 def dispatch_repl_line(session: Session, line: str) -> bool:
-    tokens = split_repl_line(line)
-    if not tokens:
-        return False
-
-    command = tokens[0].lower()
-    args = tokens[1:]
     try:
+        tokens = split_repl_line(line)
+        if not tokens:
+            return False
+
+        command = tokens[0].lower()
+        args = tokens[1:]
         if command in {"exit", "quit"}:
             return True
         if command == "help":
@@ -119,6 +119,9 @@ def dispatch_repl_line(session: Session, line: str) -> bool:
             return False
         if command == "scan":
             _handle_scan(session, args)
+            return False
+        if command == "manifest":
+            _handle_manifest(session, args)
             return False
         if command == "topics":
             _handle_topics(session, args)
@@ -182,6 +185,24 @@ def _handle_scan(session: Session, args: list[str]) -> None:
         topics_path = write_topics_csv(manifest.topics, out_path / "topics.csv")
         console.print(f"Wrote [bold]{manifest_path}[/bold]")
         console.print(f"Wrote [bold]{topics_path}[/bold]")
+
+
+def _handle_manifest(session: Session, args: list[str]) -> None:
+    positionals, options = _parse_args(args)
+    if positionals:
+        backend = _option(options, "--backend") or session.backend
+        with progress_task("Opening bag", None) as advance:
+            session.open_bag(positionals[0], backend=backend)
+            advance()
+
+    out = _option(options, "--out", "-o")
+    if out is None:
+        raise ValueError("Usage: manifest [BAG_PATH] --out MANIFEST_PATH [--backend BACKEND]")
+
+    manifest = session.scan(progress_factory=progress_task)
+    output_path = write_manifest(manifest, out)
+    console.print(f"Wrote [bold]{output_path}[/bold]")
+    render_warnings(manifest.warnings)
 
 
 def _handle_topics(session: Session, args: list[str]) -> None:
@@ -380,6 +401,7 @@ def render_repl_help() -> None:
     console.print("Commands:")
     console.print("  open BAG_PATH [--backend auto|rosbags|sqlite]")
     console.print("  scan [BAG_PATH] [--all] [--out OUT_DIR]")
+    console.print("  manifest [BAG_PATH] --out MANIFEST_PATH [--backend auto|rosbags|sqlite]")
     console.print("  topics")
     console.print("  topics -all")
     console.print("  topics -s")
