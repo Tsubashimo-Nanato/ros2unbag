@@ -1,6 +1,6 @@
 # ROSBagel
 
-[English](README.md) | 简体中文
+[English](README.md) | [日本語](README.ja.md) | 简体中文
 
 [![Release](https://img.shields.io/badge/release-v1.6.2-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
